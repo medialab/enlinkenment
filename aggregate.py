@@ -1,3 +1,6 @@
+# Workflow that parses and enriches incoming data file(s), 
+# aggregate the URLs in the files, and enriches those aggregates.
+
 import csv
 import datetime
 import gzip
