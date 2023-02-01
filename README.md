@@ -1,4 +1,9 @@
-# Workflow for parsing and enriching URL data
+# Modular workflow for parsing and enriching URL data
+
+The modular workflow will be composed of several steps (added as needed):
+1. The first module (`aggregate.py`) takes in any dataset that includes URLs, such as a collection from [`gazouilloire`](https://github.com/medialab/gazouilloire). The objective of this module is to yield two types of enriched documents: (1) an aggregate of all in-files' URLs, enriched with metadata parsed from the URL, and (2) enriched versions of the in-files.
+2. The second module (`extract.py`) fetches HTML with `minet fetch` and, when applicable, extracts the main text from online articles.
+3. The third module (`request.py`) further enriches the data by calling APIs. These calls may include the following: resolving certain URLs with `minet multithreaded_resolve()` and calling the YouTube and/or Twitter API to retrieve special metadata about a resource on the platform.
 
 
 # 1. `aggregate.py`
