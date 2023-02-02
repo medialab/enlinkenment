@@ -72,7 +72,7 @@ class Scripts:
             except:
                 script = negative_search_retweets+[infile, '|']+positive_search_links[:-1]+['-o', outfile, '"."']
             else:
-                script = ['gzcat', infile, '|']+negative_search_retweets+['|']+positive_search_links+['>','gzip', outfile]
+                script = ['gzcat', infile, '|']+negative_search_retweets+['|']+positive_search_links[:-1]+['-o', outfile, '"."']
         return True, " ".join(script)
 
     def preprocess(self, outfile, infile):

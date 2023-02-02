@@ -22,7 +22,27 @@ $ python main.py --url-col 'links' --id-col 'id' --tweets --no-retweets DATAFILE
 - `--no-retweets/--retweets` [bool, optional] : flag to indicate whether retweets are excluded from the aggregate of URLs and the parsed file(s); this is useful for Twitter data because a retweet will contain in the `links` field the URL of the original tweet, which might not be interesting for a study of links shared on Twitter
 - `datafile` [filepath, required] : path to the CSV file
 
-> Note: If using the `aggregate.py` script to analyze links shared on Twitter, you should (1) pass the name of the ID column to the option `--id-col`, (2) call the flag `--tweets`, and (3) call the flag `--no-retweets` in order to remove links that are merely links to retweeted tweets.
+---
+### Performance Test
+
+|test|file size (compressed)|total time|aggreg file size|url-parse file size (compressed)|
+|--|--|--|--|--|
+|1-02-2023|25G|0:17:47|9.2M|2.4G|
+
+|command|time elapsed|
+|--|--|
+|xsv removing retweets|0:03:44|
+|xsv pre-processing|0:00:28|
+|minet url-parse|0:08:41|
+|xsv frequency|0:00:20|
+|enrichment & aggregation|0:04:15|
+|writing aggregates|0:00:15|
+|url-parse facebook|0:00:02|
+|url-parse twitter|0:00:01|
+|url-parse youtube|0:00:01|
+
+---
+
 
 ```mermaid
 flowchart LR
