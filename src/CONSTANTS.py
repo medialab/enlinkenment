@@ -1,6 +1,10 @@
 import os
 
 MAINTABLENAME = 'tweets'
+LINKSTABLENAME = 'links'
+PARSEDLINKSTABLE = 'parsed_links'
+AGGREGATEDPARSEDLINKSTABLE = 'aggregated_parsed_links'
+AGGREGATEDDOMAINSTABLE = 'aggregated_domains'
 
 DEFAULTDATABASE = os.path.join('database', 'tweet_links.db')
 
@@ -78,3 +82,14 @@ TWEET_REDUCED = {
     'quoted_user_id':'VARCHAR',
     'links':'VARCHAR',
 }
+
+REDUCED_TWEET_COLUMNS = ','.join([k for k in TWEET_REDUCED.keys()])
+XSV_CSV = os.path.join('temp','select_tweet_columns.csv')
+XSV_SCRIPT = ['xsv', 'select', '-o', XSV_CSV, REDUCED_TWEET_COLUMNS]
+
+URL_PARSE_INFILE = os.path.join('temp', 'url-parse_infile.csv')
+URL_PARSE_OUTFILE = os.path.join('temp','url-parse_outfile.csv')
+
+TEMPFILE = os.path.join('temp', 'temp.csv')
+DOMAIN_PARSE_INFILE = os.path.join('temp', 'domain-parse_infile.csv')
+DOMAIN_PARSE_OUTFILE = os.path.join('temp', 'domain-parse_outfile.csv')
