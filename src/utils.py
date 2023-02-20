@@ -4,8 +4,6 @@ import datetime
 class Timer:
     def __init__(self, message=None) -> None:
         self.message = message
-
-    def start(self):
         self.start = timeit.default_timer()
         if self.message:
             print(f'\n{self.message}')
