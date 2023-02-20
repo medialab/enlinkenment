@@ -1,14 +1,16 @@
-from pathlib import Path
 import gzip
-from CONSTANTS import MAINTABLENAME
-from utils import Timer
-import subprocess
-from sys import platform
 import os
+import subprocess
+from pathlib import Path
+from sys import platform
 
-main_table_name = MAINTABLENAME
-input_table_name = 'input'
-input_columns_dict = {
+from rich.console import Console
+
+from CONSTANTS import MAINTABLENAME, PREPROCESSDIR
+from utils import Timer
+
+# tweet column data fields
+tweet_columns_dict = {
     'id':'UBIGINT',
     'timestamp_utc':'UBIGINT',
     'local_time': 'TIME',
@@ -24,23 +26,44 @@ input_columns_dict = {
     'quoted_user_id':'VARCHAR',
     'links':'VARCHAR',
 }
-input_columns_string = ', '.join([f'{k} {v}' for k,v in input_columns_dict.items()])
-input_columns_headers_no_space = ','.join([k for k in input_columns_dict.keys()])
-os.makedirs('temp', exist_ok=True)
-select_columns_csv = os.path.join('temp', 'select_tweet_columns.csv')
-xsv_script = ['xsv', 'select', '-o', select_columns_csv, input_columns_headers_no_space]
+
+# tweet column data fields as a string
+input_columns_string = ', '.join(
+    [f'{k} {v}' for k,v in tweet_columns_dict.items()]
+)
+
+# tweet column data fields for xsv command
+xsv_column_names = ','.join(
+    [k for k in tweet_columns_dict.keys()]
+)
 
 
-def import_data(con, datapath):
+def concatenate_xsv_script(filepath:Path):
+    with gzip.open(str(filepath), 'r') as f:
+        try:
+            f.read(1)
+        except:
+            shell = False
+            name = filepath.stem
+            output = os.path.join(PREPROCESSDIR, f'{name}.csv')
+            script = ['xsv', 'select', '-o', output, xsv_column_names, str(filepath)]
+        else:
+            shell = True
+            name = filepath.stem.split('.')[0]
+            output = os.path.join(PREPROCESSDIR, f'{name}.csv')
+            if platform == "linux" or platform == "linux2":
+                decompress = 'zcat'
+            elif platform == "darwin":
+                decompress = 'gzcat'
+            else:
+                print('Trying "zcat" command on compressed data files')
+                decompress = 'zcat'
+            script = f'{decompress} {str(filepath)} | xsv select -o {output} {xsv_column_names}'
+    return shell, script
+
+
+def select_columns(datapath):
     """Iterate through Tweet data files and import into a main table."""
-
-    # If one doesn't already exist, create a main table 
-    # in which to store all imported Tweet data
-    timer = Timer('Creating main table')
-    con.execute(f"""
-    CREATE TABLE IF NOT EXISTS {main_table_name}({input_columns_string});
-    """)
-    timer.stop()
 
     input_data_path = Path(datapath)
     if input_data_path.is_file():
@@ -50,57 +73,62 @@ def import_data(con, datapath):
     else:
         raise FileExistsError()
 
-    # Iterate through the input datasets
+    # Pre-process the input datasets
+    timer = Timer('Pre-processing data by extracting relevant columns')
+    console = Console()
+    with console.status('[green]Running XSV command on data file...') as status:
+        while file_path_objects:
+            path_obj = file_path_objects.pop(0)
+            shell, script = concatenate_xsv_script(filepath=path_obj)
+            completed_process = subprocess.run(
+                    script,
+                    shell=shell,
+                    capture_output=True
+            )
+            if completed_process.check_returncode():
+                exit()
+            console.log(f'Finished processing {path_obj.name}')
+    timer.stop()
+
+
+def import_data(connection):
+
+    # If one doesn't already exist, create a main table 
+    # in which to store all imported Tweet data
+    timer = Timer('Creating main table')
+    connection.execute(f"""
+    CREATE TABLE IF NOT EXISTS {MAINTABLENAME}({input_columns_string});
+    """)
+    timer.stop()
+
+    # Iteratively import pre-processed data
+    # Note: looping is necessary to avoid memory problem
+    file_path_objects = list(Path(PREPROCESSDIR).glob('**/*.csv'))
     for i, path_obj in enumerate(file_path_objects):
-        print(f'Processing file {i+1} of {len(file_path_objects)}')
+        filepath = str(path_obj.resolve())
 
-        # Select reduced Tweet columns with XSV in command line
-        timer = Timer(f'Using XSV to select relevant columns: {xsv_script[-1]}')
-        with gzip.open(str(path_obj), 'r') as f:
-            try:
-                f.read(1)
-            except:
-                shell = False
-                script = xsv_script+[str(path_obj)]
-            else:
-                shell = True
-                if platform == "linux" or platform == "linux2":
-                    decompress = 'zcat'
-                elif platform == "darwin":
-                    decompress = 'gzcat'
-                else:
-                    print('Trying "zcat" command on compressed data files')
-                    decompress = 'zcat'
-                script = " ".join([decompress, str(path_obj), '|']+xsv_script)
-        completed_process = subprocess.run(script, shell=shell, capture_output=True)
-        if completed_process.check_returncode():
-            exit()
-        timer.stop()
-
-        # Import the reduced Tweet columns
-        timer = Timer('Importing selected columns to database')
-        con.execute(f"""
-        DROP TABLE IF EXISTS {input_table_name}
+        timer = Timer(f'Importing data to database, file {i+1} of {len(file_path_objects)}')
+        print("Caution: Progress bar is not well adapated to reading the progress of CSV import")
+        connection.execute(f"""
+        DROP TABLE IF EXISTS input;
         """)
-        con.execute(f"""
-        CREATE TABLE IF NOT EXISTS {input_table_name}({input_columns_string})
-        """)
-        con.execute(f"""
-        INSERT INTO {input_table_name}
-        SELECT DISTINCT *
-        FROM read_csv('{select_columns_csv}', delim=',', header=True, columns={input_columns_dict});
+        connection.execute(f"""
+        CREATE TABLE input
+        AS SELECT DISTINCT *
+        FROM read_csv_auto('{filepath}');
         """)
         timer.stop()
 
-        # Merge the imported data into a central table for all Tweet data
-        timer = Timer('Merging dataset into main table')
-        con.execute(f"""
-        INSERT INTO {main_table_name}
-        SELECT {input_table_name}.*
-        FROM {input_table_name}
-        LEFT JOIN {main_table_name}
-        ON {input_table_name}.id = {main_table_name}.id
-        WHERE {main_table_name}.id IS NULL
+        timer = Timer('Merge imported data to main table')
+        connection.execute(f"""
+        INSERT INTO {MAINTABLENAME}
+        SELECT input.*
+        FROM input
+        LEFT JOIN {MAINTABLENAME}
+        ON input.id = {MAINTABLENAME}.id
+        WHERE {MAINTABLENAME}.id IS NULL
         """)
-        con.execute(f"DROP TABLE {input_table_name}")
+        connection.execute(f"""
+        DROP TABLE input
+        """)
         timer.stop()

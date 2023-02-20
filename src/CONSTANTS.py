@@ -5,6 +5,7 @@ LINKSTABLENAME = 'links'
 AGGREGATEDDOMAINSTABLE = 'aggregated_domains'
 
 DEFAULTDATABASE = os.path.join('database', 'tweet_links.db')
+PREPROCESSDIR = 'output'
 
 TWEET = {
     'id':'UBIGINT PRIMARY KEY',
