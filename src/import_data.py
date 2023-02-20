@@ -3,8 +3,11 @@ import os
 import subprocess
 from pathlib import Path
 from sys import platform
+from concurrent.futures import ProcessPoolExecutor
+import concurrent
+import time
 
-from rich.console import Console
+from rich.progress import Progress
 
 from CONSTANTS import MAINTABLENAME, PREPROCESSDIR
 from utils import Timer
@@ -38,7 +41,7 @@ xsv_column_names = ','.join(
 )
 
 
-def concatenate_xsv_script(filepath:Path):
+def run_xsv_command(task_id, filepath:Path):
     with gzip.open(str(filepath), 'r') as f:
         try:
             f.read(1)
@@ -59,7 +62,14 @@ def concatenate_xsv_script(filepath:Path):
                 print('Trying "zcat" command on compressed data files')
                 decompress = 'zcat'
             script = f'{decompress} {str(filepath)} | xsv select -o {output} {xsv_column_names}'
-    return shell, script
+    completed_process = subprocess.run(
+            script,
+            shell=shell,
+            capture_output=True
+    )
+    if completed_process.check_returncode():
+        exit()
+    return task_id
 
 
 def select_columns(datapath):
@@ -75,19 +85,20 @@ def select_columns(datapath):
 
     # Pre-process the input datasets
     timer = Timer('Pre-processing data by extracting relevant columns')
-    console = Console()
-    with console.status('[green]Running XSV command on data file...') as status:
-        while file_path_objects:
-            path_obj = file_path_objects.pop(0)
-            shell, script = concatenate_xsv_script(filepath=path_obj)
-            completed_process = subprocess.run(
-                    script,
-                    shell=shell,
-                    capture_output=True
-            )
-            if completed_process.check_returncode():
-                exit()
-            console.log(f'Finished processing {path_obj.name}')
+    with Progress() as progress:
+        tasks = {
+            progress.add_task(
+                f'[green]Running XSV command on {fp}',
+                total=len(file_path_objects)
+            ):fp
+            for fp in file_path_objects
+        }
+        while not progress.finished:
+            with ProcessPoolExecutor() as executor:
+                futures = [executor.submit(run_xsv_command, task_id, fp) for task_id, fp in tasks.items()]
+                for result in concurrent.futures.as_completed(futures):
+                    progress.update(task_id=result.result(), advance=1)
+
     timer.stop()
 
 
