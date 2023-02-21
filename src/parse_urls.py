@@ -27,13 +27,13 @@ def parse_urls(connection):
     ) tbl(link_list, tweet_id)
     """
     links_list = duckdb.sql(query=query, connection=connection)
-    link_aggregates = links_list.aggregate('link, STRING_AGG(tweet_id)')
+    link_aggregates = links_list.aggregate('link, STRING_AGG(tweet_id)').fetchall()
     timer.stop()
 
     # Parse the extracted URLs
     timer = Timer('Parsing extracted links with URAL')
     normalized_links = {}
-    for i in track(link_aggregates.fetchall()):
+    for i in track(link_aggregates):
         raw_url = str(i[0])
         tweet_id = [int(id) for id in i[1].split(',')]
         norm_url = ural_normalize_url(raw_url)

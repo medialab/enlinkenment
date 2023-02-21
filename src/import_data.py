@@ -5,9 +5,8 @@ from pathlib import Path
 from sys import platform
 from concurrent.futures import ProcessPoolExecutor
 import concurrent
-import time
 
-from rich.progress import Progress
+from rich.progress import Progress, TimeElapsedColumn, SpinnerColumn, TextColumn
 
 from CONSTANTS import MAINTABLENAME, PREPROCESSDIR
 from utils import Timer
@@ -41,7 +40,7 @@ xsv_column_names = ','.join(
 )
 
 
-def run_xsv_command(task_id, filepath:Path):
+def run_xsv_command(filepath:Path):
     with gzip.open(str(filepath), 'r') as f:
         try:
             f.read(1)
@@ -69,7 +68,6 @@ def run_xsv_command(task_id, filepath:Path):
     )
     if completed_process.check_returncode():
         exit()
-    return task_id
 
 
 def select_columns(datapath):
@@ -85,20 +83,23 @@ def select_columns(datapath):
 
     # Pre-process the input datasets
     timer = Timer('Pre-processing data by extracting relevant columns')
-    with Progress() as progress:
+    with Progress(
+        TextColumn('[progress.description]{task.description}'),
+        SpinnerColumn(),
+        TimeElapsedColumn()
+    ) as progress_bars:
         tasks = {
-            progress.add_task(
+            progress_bars.add_task(
                 f'[green]Running XSV command on {fp}',
-                total=len(file_path_objects)
+                total=len(file_path_objects),
+                start=False
             ):fp
             for fp in file_path_objects
         }
-        while not progress.finished:
-            with ProcessPoolExecutor() as executor:
-                futures = [executor.submit(run_xsv_command, task_id, fp) for task_id, fp in tasks.items()]
-                for result in concurrent.futures.as_completed(futures):
-                    progress.update(task_id=result.result(), advance=1)
-
+        for task_id, fp in tasks.items():
+            progress_bars.start_task(task_id=task_id)
+            run_xsv_command(filepath=fp)
+            progress_bars.stop_task(task_id=task_id)
     timer.stop()
 
 
