@@ -126,7 +126,7 @@ def import_data(connection):
         """)
         connection.execute(f"""
         CREATE TABLE input
-        AS SELECT DISTINCT *
+        AS SELECT *
         FROM read_csv_auto('{filepath}');
         """)
         timer.stop()
@@ -134,7 +134,7 @@ def import_data(connection):
         timer = Timer('Merge imported data to main table')
         connection.execute(f"""
         INSERT INTO {MAINTABLENAME}
-        SELECT input.*
+        SELECT DISTINCT input.*
         FROM input
         LEFT JOIN {MAINTABLENAME}
         ON input.id = {MAINTABLENAME}.id
