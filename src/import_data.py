@@ -1,12 +1,11 @@
-import gzip
 import os
-import subprocess
 from pathlib import Path
-from sys import platform
-from concurrent.futures import ProcessPoolExecutor
-import concurrent
 
-from rich.progress import Progress, TimeElapsedColumn, SpinnerColumn, TextColumn
+import pyarrow
+import pyarrow.csv
+import pyarrow.parquet
+from rich.progress import (Progress, SpinnerColumn, TextColumn,
+                           TimeElapsedColumn)
 
 from CONSTANTS import MAINTABLENAME, PREPROCESSDIR
 from utils import Timer
@@ -40,36 +39,6 @@ xsv_column_names = ','.join(
 )
 
 
-def run_xsv_command(filepath:Path):
-    with gzip.open(str(filepath), 'r') as f:
-        try:
-            f.read(1)
-        except:
-            shell = False
-            name = filepath.stem
-            output = os.path.join(PREPROCESSDIR, f'{name}.csv')
-            script = ['xsv', 'select', '-o', output, xsv_column_names, str(filepath)]
-        else:
-            shell = True
-            name = filepath.stem.split('.')[0]
-            output = os.path.join(PREPROCESSDIR, f'{name}.csv')
-            if platform == "linux" or platform == "linux2":
-                decompress = 'zcat'
-            elif platform == "darwin":
-                decompress = 'gzcat'
-            else:
-                print('Trying "zcat" command on compressed data files')
-                decompress = 'zcat'
-            script = f'{decompress} {str(filepath)} | xsv select -o {output} {xsv_column_names}'
-    completed_process = subprocess.run(
-            script,
-            shell=shell,
-            capture_output=True
-    )
-    if completed_process.check_returncode():
-        exit()
-
-
 def select_columns(datapath):
     """Iterate through Tweet data files and import into a main table."""
 
@@ -90,7 +59,7 @@ def select_columns(datapath):
     ) as progress_bars:
         tasks = {
             progress_bars.add_task(
-                f'[green]Running XSV command on {fp}',
+                f'[green]Streaming... {fp.name}',
                 total=len(file_path_objects),
                 start=False
             ):fp
@@ -98,9 +67,29 @@ def select_columns(datapath):
         }
         for task_id, fp in tasks.items():
             progress_bars.start_task(task_id=task_id)
-            run_xsv_command(filepath=fp)
+            csv_to_parquet(in_path=fp)
             progress_bars.stop_task(task_id=task_id)
     timer.stop()
+
+
+def csv_to_parquet(in_path):
+    name = in_path.stem.split('.')[0]
+    out_path = os.path.join(PREPROCESSDIR, f'{name}.parquet')
+    convert_options = pyarrow.csv.ConvertOptions()
+    convert_options.include_columns = [key for key in tweet_columns_dict.keys()]
+    parser_options = pyarrow.csv.ParseOptions()
+    parser_options.newlines_in_values = True
+    writer = None
+    with pyarrow.csv.open_csv(str(in_path), convert_options=convert_options, parse_options=parser_options) as reader:
+        for next_chunk in reader:
+            if next_chunk is None:
+                break
+            if writer is None:
+                writer = pyarrow.parquet.ParquetWriter(out_path, next_chunk.schema)
+            next_table = pyarrow.Table.from_batches([next_chunk])
+            writer.write_table(next_table)
+    writer.close()
+
 
 
 def import_data(connection):
@@ -115,19 +104,19 @@ def import_data(connection):
 
     # Iteratively import pre-processed data
     # Note: looping is necessary to avoid memory problem
-    file_path_objects = list(Path(PREPROCESSDIR).glob('**/*.csv'))
+    file_path_objects = list(Path(PREPROCESSDIR).glob('**/*.parquet'))
     for i, path_obj in enumerate(file_path_objects):
         filepath = str(path_obj.resolve())
 
         timer = Timer(f'Importing data to database, file {i+1} of {len(file_path_objects)}')
-        print("Caution: Progress bar is not well adapated to reading the progress of CSV import")
         connection.execute(f"""
         DROP TABLE IF EXISTS input;
         """)
         connection.execute(f"""
         CREATE TABLE input
         AS SELECT *
-        FROM read_csv_auto('{filepath}');
+        FROM read_parquet('{filepath}')
+        WHERE links IS NOT NULL;
         """)
         timer.stop()
 

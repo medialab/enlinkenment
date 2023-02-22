@@ -8,7 +8,7 @@ import duckdb
 from CONSTANTS import DEFAULTDATABASE, PREPROCESSDIR
 from utils import Timer
 from import_data import select_columns, import_data
-from parse_urls import parse_urls
+from parse_urls import parse_urls, aggregating_links
 from aggregate import domains
 
 @click.command()
@@ -24,7 +24,7 @@ def main(datapath, database_dir):
     shutil.rmtree(PREPROCESSDIR, ignore_errors=True)
     os.makedirs(PREPROCESSDIR, exist_ok=True)
 
-    # Isolate relevant columns using Rust package XSV
+    # Isolate relevant columns using arrow csv parser
     select_columns(datapath=datapath)
 
     # ------------------------------------------------------------------ #
@@ -43,12 +43,22 @@ def main(datapath, database_dir):
     connection.execute('PRAGMA enable_progress_bar')
 
     # Import the pre-processed data files to the database
+    print("\n---------------------------------------------")
+    print("-----------------DATA IMPORT-----------------")
     import_data(connection)
 
-    # Extract and parse URLs from the data 
+    # Extract and parse URLs from the data
+    print("\n---------------------------------------------")
+    print("-----------------PARSE URLS------------------")
     parse_urls(connection)
 
+    print("\n---------------------------------------------")
+    print("---------------AGGREGATE LINKS---------------")
+    aggregating_links(connection)
+
     # Aggregate the URLs by domain
+    print("\n---------------------------------------------")
+    print("--------------AGGREGATE DOMAINS--------------")
     domains(connection)
 
     timer.stop()

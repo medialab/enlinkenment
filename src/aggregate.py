@@ -25,10 +25,10 @@ def domains(connection):
     domain_columns = {
         'id':'VARCHAR',
         'domain': 'VARCHAR',
-        'nb_total_tweets':'INTEGER',
-        'nb_original_tweets':'INTEGER',
-        'nb_retweets':'INTEGER',
-        'nb_users_distinct':'INTEGER'
+        'nb_total_tweets':'UBIGINT',
+        'nb_original_tweets':'UBIGINT',
+        'nb_retweets':'UBIGINT',
+        'nb_users_distinct':'UBIGINT'
     }
     column_string = ', '.join([f'{k} {v}' for k,v in domain_columns.items()])
     connection.execute(f"""

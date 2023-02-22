@@ -1,23 +1,36 @@
-import os
-
 import duckdb
 import pyarrow
-import pyarrow.parquet as pq
 from rich.progress import track
 from ural import get_domain_name as ural_get_domain_name
 from ural import normalize_url as ural_normalize_url
 
-from CONSTANTS import LINKSTABLENAME, MAINTABLENAME, PREPROCESSDIR
+from CONSTANTS import LINKSTABLENAME, MAINTABLENAME
 from utils import Timer
+
+association_table = 'link_tweet_relation'
+parse_results_table = 'url_parse_results'
 
 
 def parse_urls(connection):
     connection.execute('PRAGMA enable_progress_bar')
 
     # Extract individual URLs from a string concatenation
-    timer = Timer('Extracting links and tweet IDs')
-    query = f"""
-    SELECT UNNEST(link_list) as link, tweet_id
+    timer = Timer('Relating links to tweets')
+    connection.execute(f"""
+    DROP TABLE IF EXISTS {association_table};
+    """)
+    connection.execute(f"""
+    CREATE TABLE {association_table}(id BIGINT, link VARCHAR, tweet_id UBIGINT);
+    """)
+    connection.execute(f"""
+    DROP SEQUENCE IF EXISTS seq0;
+    """)
+    connection.execute(f"""
+    CREATE SEQUENCE seq0;
+    """)
+    connection.execute(f"""
+    INSERT INTO {association_table}
+    SELECT NEXTVAL('seq0'), UNNEST(link_list) as link, tweet_id
     FROM (
         SELECT STRING_SPLIT(s.links, '|') as link_list, id
         FROM (
@@ -26,55 +39,63 @@ def parse_urls(connection):
             WHERE links IS NOT NULL
         ) AS s
     ) tbl(link_list, tweet_id)
-    """
-    links_list = duckdb.sql(query=query, connection=connection).fetchall()
+    WHERE LEN(link_list) > 0;
+    """)
+    link_tweet_pairs = duckdb.table(
+        table_name=association_table,
+        connection=connection
+    )
+    timer.stop()
+
+    timer = Timer('In preparation of parsing, aggregating the links')
+    link_aggregate = link_tweet_pairs.aggregate(
+        'link, STRING_AGG(id)'
+    ).fetchall()
     timer.stop()
 
     timer = Timer('Parsing extracted links with URAL')
     # Create empty column arrays
-    link_list, tweet_ids_list, normalized_url_list, domain_name_list = [], [], [], []
-    for tuple in track(links_list):
+    link_list, normalized_url_list, domain_name_list, link_relation_ids = [], [], [], []
+    for tuple in track(link_aggregate):
         # Parse the row data
         raw_url = str(tuple[0])
         norm_url = ural_normalize_url(raw_url)
         domain = ural_get_domain_name(norm_url)
-        tweet_id = int(tuple[1])
+        relation_ids = [int(i) for i in tuple[1].split(',')]
         # Add row data to the column's array
         link_list.append(raw_url)
-        tweet_ids_list.append(tweet_id)
         normalized_url_list.append(norm_url)
         domain_name_list.append(domain)
+        link_relation_ids.append(relation_ids)
     # Name columns
     table_column_names = [
         'normalized_url',
         'domain_name',
         'link',
-        'tweet_id',
+        'link_relation_ids',
     ]
     # Create Arrow table
     timer.stop()
-    timer = Timer('Writing parsed URL data to parquet file')
+
+    timer = Timer('Writing parsed URL data to pyarrow table')
     aggregated_links_table = pyarrow.table(
         [
             pyarrow.array(normalized_url_list, type=pyarrow.string()),
             pyarrow.array(domain_name_list, type=pyarrow.string()),
             pyarrow.array(link_list, type=pyarrow.string()),
-            pyarrow.array(tweet_ids_list, type=pyarrow.int64()),
+            pyarrow.array(link_relation_ids, type=pyarrow.list_(pyarrow.int64())),
         ],
         names=table_column_names
     )
-
-    # Write table to a parquet file
-    parquet_file = os.path.join(PREPROCESSDIR, 'aggregate.parquet')
-    pq.write_table(
-        aggregated_links_table,
-        parquet_file,
-        compression='gzip'
-    )
     timer.stop()
 
-    timer = Timer('Importing parquet file to database')
-    # Read parquet file to DuckDB table
+    timer = Timer('Creating SQL table from pyarrow table')
+    duckdb.from_arrow(arrow_object=aggregated_links_table, connection=connection).create(table_name=parse_results_table)
+    timer.stop()
+
+
+def aggregating_links(connection):
+    timer = Timer('Building enriched links table')
     links_column_dict = {
         'id':'VARCHAR PRIMARY KEY',
         'normalized_url':'VARCHAR',
@@ -85,29 +106,48 @@ def parse_urls(connection):
     }
     links_columns_string = ', '.join(f'{k} {v}' for k,v in links_column_dict.items())
     connection.execute(f"""
+    DROP TABLE IF EXISTS temp;
+    """)
+    connection.execute(f"""
+    CREATE TABLE temp(normalized_url VARCHAR, domain_name VARCHAR, link VARCHAR, tweet_id VARCHAR);
+    """)
+    connection.execute(f"""
+    INSERT INTO temp
+    SELECT  b.normalized_url,
+            b.domain_name,
+            b.link,
+            a.tweet_id,
+    FROM {association_table} a
+    JOIN (
+        SELECT  UNNEST(link_relation_ids) as id,
+                link,
+                normalized_url,
+                domain_name,
+        FROM {parse_results_table}
+    ) b
+    ON a.id = b.id
+    """)
+    timer.stop()
+
+    timer = Timer('Aggregating links in table')
+    connection.execute(f"""
+    DROP TABLE IF EXISTS {LINKSTABLENAME};
+    """)
+    connection.execute(f"""
     CREATE TABLE {LINKSTABLENAME}({links_columns_string});
     """)
     connection.execute(f"""
     INSERT INTO {LINKSTABLENAME}
-    SELECT  md5(normalized_url),
-            normalized_url,
-            ANY_VALUE(domain_name),
-            md5(ANY_VALUE(domain_name)),
-            ARRAY_AGG(tweet_id),
-            ARRAY_AGG(DISTINCT link),
-    FROM read_parquet('{parquet_file}')
+    SELECT  md5(normalized_url) as id,
+            normalized_url as normalized_url,
+            ANY_VALUE(domain_name) as domain_name,
+            md5(ANY_VALUE(domain_name)) as domain_id,
+            ARRAY_AGG(tweet_id) as tweet_ids,
+            ARRAY_AGG(DISTINCT link) as distinct_links,
+    FROM temp
     GROUP BY normalized_url
     """)
-    timer.stop()
-    timer = Timer('Counting sums in aggregated links table')
-    print('Counting number of tweets per link')
     connection.execute(f"""
-    ALTER TABLE {LINKSTABLENAME} ADD COLUMN nb_tweets INTEGER DEFAULT 0;
-    UPDATE {LINKSTABLENAME} SET nb_tweets = LEN(tweet_ids);
-    """)
-    print('Counting number of link variations')
-    connection.execute(f"""
-    ALTER TABLE {LINKSTABLENAME} ADD COLUMN nb_distinct_links INTEGER DEFAULT 0;
-    UPDATE {LINKSTABLENAME} SET nb_distinct_links = LEN(distinct_links);
+    DROP TABLE temp
     """)
     timer.stop()
