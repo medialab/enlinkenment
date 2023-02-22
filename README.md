@@ -9,30 +9,39 @@ The modular workflow will be composed of several steps (added as needed):
 3. (`request.py`) : call APIs, i.e. resolve certain URLs with `minet multithreaded_resolve()`, call the YouTube and/or Twitter API to retrieve special metadata about a resource on the platform.
 
 
-# 1. `src/main.py`
+# 1. Aggregate domains
 ```shell
-python src/main.py DATA/
+python src/main.py ./DATA/DIRECTORY/
 ```
 
 ---
 ## Performance Tests
+26G compressed (December 2022) + 25G compressed (November 2022)
 
-|test|files|total time|
+|step|action|duration|
 |--|--|--|
-|10-02-2023|26G + 25G (compressed)|--|
+|preprocess data|26G compressed file|0:03:49|
+||25G compressed file|0:03:43|
+|||
+|data import|create main table scheme|0:00:00|
+||read pre-processed 26G file to database|0:01:01|
+||insert imported data to main table|0:00:17|
+||read pre-processed 25G file to database|0:00:54|
+||insert imported data to main table|0:00:25|
+|||
+|parse urls|explode links and relate to tweet id|0:02:04|
+||aggregate links|0:00:10|
+||parse unique links with URAL|0:03:28|
+||compile cleaned parsed results to pyarrow table|0:00:06|
+||create database table from pyarrow table|0:00:05|
+|||
+|aggregate links|de-aggregate links and enrich exploded links table|0:01:27|
+||aggregate enriched links|0:03:51|
+|||
+|aggregate domains|associate domains to tweets|0:00:23|
+||aggregate links by domain|0:02:37|
 
-|file|command|time elapsed|
-|--|--|--|
-|26G|extracting relevant columns|0:03:47|
-|26G|importing columns to database|0:02:10|
-|26G|merging imported data to main table|0:01:09|
-||||
-|25G|extracting relevant columns|0:03:43|
-|25G|importing columns to database|0:02:19|
-|25G|merging imported data to main table|0:01:31|
-||||
-|--|aggregating links|0:01:02|
-|--|parsing urls with minet|0:07:26|
+finished in 0:24:29
 
 ---
 
@@ -46,15 +55,18 @@ input2[datafile_2.csv.gz]
 end
 
 subgraph Output
-subgraph URL Parse
-input1 --> a[url-parse_datafile_1.csv.gz]
-input2 --> b[url-parse_datafile_2.csv.gz]
+subgraph Pre-process
+input1 --> a[datafile_1.parquet]
+input2 --> b[datafile_2.parquet]
 end
 
+subgraph Processing
+a --> c[processing]
+b --> c
+end
 
 subgraph Aggregation
-a --> c[aggreg_datafile.csv]
-b --> c
+c --> d[domains.csv]
 end
 end
 ```
