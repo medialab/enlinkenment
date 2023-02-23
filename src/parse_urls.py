@@ -3,6 +3,7 @@ import pyarrow
 from rich.progress import track
 from ural import get_domain_name as ural_get_domain_name
 from ural import normalize_url as ural_normalize_url
+from ural.youtube import parse_youtube_url
 
 from CONSTANTS import LINKSTABLENAME, MAINTABLENAME
 from utils import Timer

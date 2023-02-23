@@ -60,6 +60,7 @@ def domains(connection):
     )
     GROUP BY domain_id
     """)
+    duckdb.table(table_name=AGGREGATEDDOMAINSTABLE, connection=connection).order('nb_total_tweets')
     timer.stop()
 
     # Write the aggregated domains table to a CSV
