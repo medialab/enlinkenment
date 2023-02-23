@@ -1,21 +1,31 @@
-# Modular workflow for parsing and enriching URL data
+# Enlinkenment
 
-The modular workflow will be composed of several steps (added as needed):
-1. The first module (`aggregate.py`) takes in any dataset that includes URLs, such as a collection from [`gazouilloire`](https://github.com/medialab/gazouilloire). The objective of this module is to yield two types of enriched documents: (1) an aggregate of all in-files' URLs, enriched with metadata parsed from the URL, and (2) enriched versions of the in-files.
-
-[*maybe*]
-
-2. (`extract.py`) : download HTML with `minet fetch` and, when an online article, extract the main text.
-3. (`request.py`) : call APIs, i.e. resolve certain URLs with `minet multithreaded_resolve()`, call the YouTube and/or Twitter API to retrieve special metadata about a resource on the platform.
-
-
-# 1. Aggregate domains
-```shell
-python src/main.py ./DATA/DIRECTORY/
-```
+A modular workflow for parsing and enriching URL data.
 
 ---
-## Performance Tests
+## Table of Contents
+- [Installation](#installation)
+- [Performance](#performance)
+- [Process](#process)
+---
+## Installation
+1. Create a new virtual environment with Python 3.11.
+1. Clone the repository from GitHub onto your local machine.
+    ```shell
+    git clone git@github.com:medialab/enlinkenment.git
+    cd enlinkenment
+    ```
+2. Install Python dependencies.
+    ```shell
+    pip install -r requirements.txt
+    ```
+3. Run the process [`src/main.py`](src/main.py) on your data file or on a directory containing data files with a `.csv` or `.gz` extension.
+    ```shell
+    python src/main.py ./DATA/DIRECTORY/
+    ```
+
+---
+## Performance
 26G compressed (December 2022) + 25G compressed (November 2022)
 
 |step|action|duration|
@@ -44,31 +54,17 @@ python src/main.py ./DATA/DIRECTORY/
 finished in 0:24:29
 
 ---
+## Process
 
-
+### Pre-process data files
 ```mermaid
-flowchart LR
+flowchart TD
 
-subgraph Input
-input1[datafile_1.csv.gz]
-input2[datafile_2.csv.gz]
-end
+input[/"full data file\n[csv]"/] -->pyarrow(pyarrow.csv reader\npyarrow.parquet writer)-->parquet[/"selected columns\n[parquet]"/]
+parquet-->dbimport("duckdb\nread_parquet()")-->db[(database)]
+db-->inputtable[table: input]
+db===maintable[table: maintable]
+inputtable-->merge(INSERT INTO maintable\nSELECT DISTINCT input.*\nFROM input\nLEFT JOIN maintable\nON input.id = maintable.id\nWHERE maintable.id IS NULL)-->maintable
+style merge text-align:left
 
-subgraph Output
-subgraph Pre-process
-input1 --> a[datafile_1.parquet]
-input2 --> b[datafile_2.parquet]
-end
-
-subgraph Processing
-a --> c[processing]
-b --> c
-end
-
-subgraph Aggregation
-c --> d[domains.csv]
-end
-end
 ```
-
-
