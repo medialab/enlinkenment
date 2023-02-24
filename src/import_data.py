@@ -14,7 +14,7 @@ from utils import Timer
 tweet_columns_dict = {
     'id':'UBIGINT',
     'timestamp_utc':'UBIGINT',
-    'local_time': 'TIME',
+    'local_time': 'DATETIME',
     'retweet_count':'INTEGER',
     'like_count':'INTEGER',
     'reply_count':'INTEGER',

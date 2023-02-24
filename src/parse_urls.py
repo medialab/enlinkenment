@@ -37,10 +37,9 @@ def parse_urls(connection):
         FROM (
             SELECT links, id
             FROM {MAINTABLENAME}
-            WHERE links IS NOT NULL
-        ) AS s
+            WHERE LEN(links) > 1
+        ) s
     ) tbl(link_list, tweet_id)
-    WHERE LEN(link_list) > 0;
     """)
     link_tweet_pairs = duckdb.table(
         table_name=association_table,
@@ -82,7 +81,7 @@ def parse_urls(connection):
     timer.stop()
 
     timer = Timer('Writing parsed URL data to pyarrow table')
-    aggregated_links_table = pyarrow.table(
+    pyarrow_links_table = pyarrow.table(
         [
             pyarrow.array(normalized_url_list, type=pyarrow.string()),
             pyarrow.array(domain_name_list, type=pyarrow.string()),
@@ -93,41 +92,64 @@ def parse_urls(connection):
     )
     timer.stop()
 
-    timer = Timer('Creating SQL table from pyarrow table')
-    duckdb.from_arrow(arrow_object=aggregated_links_table, connection=connection).create(table_name=parse_results_table)
+    timer = Timer('Writing to disk/database pyarrow table')
+    duckdb.from_arrow(arrow_object=pyarrow_links_table, connection=connection).create(table_name=parse_results_table)
     timer.stop()
 
+    timer = Timer('Updating link-tweet association table')
+    # Add normalized url
+    connection.execute(f"""
+    ALTER TABLE {association_table}
+        ADD COLUMN normalized_url VARCHAR;
+    """)
+    connection.execute(f"""
+    UPDATE {association_table}
+        SET normalized_url = {parse_results_table}.normalized_url
+        FROM {parse_results_table}
+        WHERE {association_table}.id = {parse_results_table}.id
+    """)
+    # Add id for normalized url
+    connection.execute(f"""
+    ALTER TABLE {association_table}
+        ADD COLUMN normalized_id VARCHAR;
+    """)
+    connection.execute(f"""
+    UPDATE {association_table}
+        SET normalized_id = md5(normalized_url)
+    """)
+    # Add domain name
+    connection.execute(f"""
+    ALTER TABLE {association_table}
+        ADD COLUMN domain_name VARCHAR;
+    """)
+    connection.execute(f"""
+    UPDATE {association_table}
+        SET domain_name = {parse_results_table}.domain_name
+        FROM {parse_results_table}
+        WHERE {association_table}.id = {parse_results_table}.id
+    """)
+    # Add id for domain name
+    connection.execute(f"""
+    ALTER TABLE {association_table}
+        ADD COLUMN domain_id VARCHAR;
+    """)
+    connection.execute(f"""
+    UPDATE {association_table}
+        SET domain_id = md5(domain_name)
+    """)
+    timer.stop()
 
 def aggregating_links(connection):
-    timer = Timer('Building enriched links table')
+    timer = Timer('Aggregating links in table')
     links_column_dict = {
         'id':'VARCHAR PRIMARY KEY',
         'normalized_url':'VARCHAR',
         'domain_name':'VARCHAR',
         'domain_id':'VARCHAR',
-        'tweet_ids':'BIGINT[]',
+        'tweet_ids':'VARCHAR[]',
         'distinct_links':'VARCHAR[]',
     }
     links_columns_string = ', '.join(f'{k} {v}' for k,v in links_column_dict.items())
-    connection.execute(f"""
-    DROP TABLE IF EXISTS temp;
-    """)
-    connection.execute(f"""
-    CREATE TABLE temp(normalized_url VARCHAR, domain_name VARCHAR, link VARCHAR, tweet_id VARCHAR);
-    """)
-    connection.execute(f"""
-    INSERT INTO temp
-    SELECT  b.normalized_url,
-            b.domain_name,
-            b.link,
-            a.tweet_id,
-    FROM {association_table} a
-    JOIN {parse_results_table} b
-    ON a.id = b.id
-    """)
-    timer.stop()
-
-    timer = Timer('Aggregating links in table')
     connection.execute(f"""
     DROP TABLE IF EXISTS {LINKSTABLENAME};
     """)
@@ -136,16 +158,13 @@ def aggregating_links(connection):
     """)
     connection.execute(f"""
     INSERT INTO {LINKSTABLENAME}
-    SELECT  md5(normalized_url) as id,
-            normalized_url as normalized_url,
+    SELECT  normalized_id as id,
+            ANY_VALUE(normalized_url) as normalized_url,
             ANY_VALUE(domain_name) as domain_name,
-            md5(ANY_VALUE(domain_name)) as domain_id,
-            ARRAY_AGG(tweet_id) as tweet_ids,
+            ANY_VALUE(domain_id) as domain_id,
+            ARRAY_AGG(DISTINCT tweet_id) as tweet_ids,
             ARRAY_AGG(DISTINCT link) as distinct_links,
-    FROM temp
-    GROUP BY normalized_url
-    """)
-    connection.execute(f"""
-    DROP TABLE temp
+    FROM {association_table}
+    GROUP BY normalized_id
     """)
     timer.stop()

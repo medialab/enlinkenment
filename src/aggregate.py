@@ -8,32 +8,16 @@ from utils import Timer
 
 def domains(connection):
 
-    # Establish every relation between a tweet and a domain
-    timer = Timer('Relate tweets and domains')
-    connection.execute(f"""
-    DROP TABLE IF EXISTS tweet_domain_relation
-    """)
-    connection.execute(f"""
-    DROP SEQUENCE IF EXISTS seq1;
-    """)
-    connection.execute(f"""
-    CREATE SEQUENCE seq1;
-    CREATE TABLE tweet_domain_relation(id BIGINT DEFAULT NEXTVAL('seq1'), tweet_id BIGINT, domain_id VARCHAR, domain_name VARCHAR);
-    INSERT INTO tweet_domain_relation
-    SELECT NEXTVAL('seq1'), UNNEST(tweet_ids), domain_id, domain_name
-    FROM {LINKSTABLENAME};
-    """)
-    timer.stop()
-
     # Aggregate domains in a table
     timer = Timer('Aggregate URLs by domain')
     domain_columns = {
         'id':'VARCHAR',
         'domain': 'VARCHAR',
-        'nb_total_tweets':'UBIGINT',
-        'nb_original_tweets':'UBIGINT',
-        'nb_retweets':'UBIGINT',
-        'nb_users_distinct':'UBIGINT'
+        'nb_links_from_domain':'UBIGINT',
+        'nb_collected_tweets_with_domain':'UBIGINT',
+        'nb_collected_retweets_with_domain':'UBIGINT',
+        'sum_all_tweets_with_domain':'UBIGINT',
+        'nb_distinct_accounts_shared_domain':'UBIGINT',
     }
     column_string = ', '.join([f'{k} {v}' for k,v in domain_columns.items()])
     connection.execute(f"""
@@ -44,31 +28,33 @@ def domains(connection):
     """)
     connection.execute(f"""
     INSERT INTO {AGGREGATEDDOMAINSTABLE}
-    SELECT  domain_id,
-            ANY_VALUE(domain_name),
-            LEN(STRING_AGG(tweet_id)),
-            LEN(STRING_AGG(tweet_id))-LEN(STRING_AGG(retweeted_id))+0,
-            LEN(STRING_AGG(retweeted_id)),
-            LEN(STRING_AGG(DISTINCT user_id))
+    SELECT  c.domain_id,
+            ANY_VALUE(c.domain_name),
+            COUNT(DISTINCT c.distinct_links),
+            COUNT(DISTINCT c.tweet_id)-COUNT(DISTINCT c.retweeted_id),
+            COUNT(DISTINCT c.retweeted_id),
+            COUNT(DISTINCT c.tweet_id),
+            COUNT(DISTINCT c.user_id),
     FROM (
-        SELECT  tweet_domain_relation.tweet_id,
-                retweet_count,
-                like_count,
-                reply_count,
-                user_id,
-                user_followers,
-                retweeted_id,
-                quoted_id,
-                links,
-                domain_name,
-                domain_id
-        FROM tweet_domain_relation
-        JOIN {MAINTABLENAME}
-        ON tweet_domain_relation.tweet_id = {MAINTABLENAME}.id
-    )
-    GROUP BY domain_id
+        SELECT  b.tweet_id,
+                a.user_id,
+                a.retweeted_id,
+                a.quoted_id,
+                b.domain_name,
+                b.domain_id,
+                b.distinct_links,
+        FROM {MAINTABLENAME} a
+        JOIN (
+            SELECT UNNEST(tweet_ids) as tweet_id, domain_id, domain_name, distinct_links
+            FROM {LINKSTABLENAME}
+        ) b
+        ON b.tweet_id = a.id
+    ) c
+    WHERE c.domain_id IS NOT NULL
+    GROUP BY c.domain_id
     """)
-    duckdb.table(table_name=AGGREGATEDDOMAINSTABLE, connection=connection).order('nb_total_tweets')
+
+    duckdb.table(table_name=AGGREGATEDDOMAINSTABLE, connection=connection).order('nb_collected_tweets_with_domain')
     timer.stop()
 
     # Write the aggregated domains table to a CSV
