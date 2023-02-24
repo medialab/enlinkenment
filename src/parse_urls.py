@@ -3,7 +3,7 @@ import pyarrow
 from rich.progress import track
 from ural import get_domain_name as ural_get_domain_name
 from ural import normalize_url as ural_normalize_url
-from ural.youtube import parse_youtube_url
+from ural.youtube import YOUTUBE_DOMAINS
 
 from CONSTANTS import LINKSTABLENAME, MAINTABLENAME
 from utils import Timer
@@ -62,6 +62,8 @@ def parse_urls(connection):
         raw_url = str(tuple[0])
         norm_url = ural_normalize_url(raw_url)
         domain = ural_get_domain_name(norm_url)
+        if domain in YOUTUBE_DOMAINS:
+            domain = 'youtube.com'
         relation_ids = [int(i) for i in tuple[1].split(',')]
         for id in relation_ids:
             # Add row data to the column's array
