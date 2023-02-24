@@ -163,3 +163,74 @@ associationid-->deaggregate
 end
 
 ```
+### Aggregate links
+By the normalized version of the URL, aggregate all the links in the association table (`link_tweet_relation`) and insert them into a new table (`links`).
+```sql
+INSERT INTO links
+SELECT  normalized_id as id,
+        ANY_VALUE(normalized_url) as normalized_url,
+        ANY_VALUE(domain_name) as domain_name,
+        ANY_VALUE(domain_id) as domain_id,
+        ARRAY_AGG(DISTINCT tweet_id) as tweet_ids,
+        ARRAY_AGG(DISTINCT link) as distinct_links,
+FROM link_tweet_relation
+GROUP BY normalized_id
+```
+
+### Aggregate domains
+Join the main table of imported tweet data (`tweets`) and the table of enriched links (`links`) and group by the link's domain. To have a sum of tweets and users per domain, aggregate the tweet ID, retweet ID, and user ID with a count. For analyses about the frequency of the domain's links on the platform, various aggregation methods are used.
+```sql
+INSERT INTO aggregated_domains
+SELECT  c.domain_id,
+        ANY_VALUE(c.domain_name),
+        COUNT(DISTINCT c.distinct_links),
+        COUNT(DISTINCT c.tweet_id)-COUNT(DISTINCT c.retweeted_id),
+        COUNT(DISTINCT c.retweeted_id),
+        COUNT(DISTINCT c.tweet_id),
+        COUNT(DISTINCT c.user_id),
+        min(local_time),
+        max(local_time),
+        datediff('day', min(local_time), max(local_time)),
+        histogram(date_trunc('month', local_time)),
+FROM (
+    SELECT  b.tweet_id,
+            a.user_id,
+            a.retweeted_id,
+            a.quoted_id,
+            b.domain_name,
+            b.domain_id,
+            b.distinct_links,
+            a.local_time
+    FROM tweets a
+    JOIN (
+        SELECT UNNEST(tweet_ids) as tweet_id, domain_id, domain_name, distinct_links
+        FROM links
+    ) b
+    ON b.tweet_id = a.id
+) c
+WHERE c.domain_id IS NOT NULL
+GROUP BY c.domain_id
+```
+In a new `GROUP BY` that groups the join by both a link's domain its month of publication, count the number of tweets per month.
+```sql
+UPDATE aggregated_domains
+    SET nb_tweets_per_month_with_domain = s.count_per_month
+    FROM (
+        SELECT  COUNT(tweet_id) as count_per_month, domain_id
+        FROM (
+            SELECT  b.tweet_id,
+                    a.local_time,
+                    b.domain_id,
+                    b.domain_name
+            FROM tweets a
+            JOIN (
+                SELECT UNNEST(tweet_ids) as tweet_id, domain_id, domain_name
+                FROM links
+            ) b
+            ON b.tweet_id = a.id
+        ) c
+        WHERE c.domain_id IS NOT NULL
+        GROUP BY DATEPART('month', local_time), domain_id
+    ) s
+    WHERE aggregated_domains.id = s.domain_id;
+```
