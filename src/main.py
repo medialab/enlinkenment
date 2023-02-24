@@ -62,6 +62,7 @@ def main(datapath, output_dir, save):
     print("--------------AGGREGATE DOMAINS--------------")
     domains(connection)
 
+    print("---------------------------------------------")
     timer.stop()
 
 
