@@ -5,7 +5,6 @@ import shutil
 import click
 import duckdb
 
-from CONSTANTS import DEFAULTDATABASE, PREPROCESSDIR
 from utils import Timer
 from import_data import select_columns, import_data
 from parse_urls import parse_urls, aggregating_links
@@ -13,16 +12,16 @@ from aggregate import domains
 
 @click.command()
 @click.argument('datapath')
-@click.option('-d', '--database-dir', required=False)
-def main(datapath, database_dir):
+@click.option('-o', '--output-dir', required=False)
+def main(datapath, output_dir):
     timer = Timer()
 
     # ------------------------------------------------------------------ #
     #                         PREPROCESS DATA
 
     # Make a directory in which to store pre-processed data
-    shutil.rmtree(PREPROCESSDIR, ignore_errors=True)
-    os.makedirs(PREPROCESSDIR, exist_ok=True)
+    shutil.rmtree('output', ignore_errors=True)
+    os.makedirs('output', exist_ok=True)
 
     # Isolate relevant columns using arrow csv parser
     select_columns(datapath=datapath)
@@ -31,12 +30,12 @@ def main(datapath, database_dir):
     #                         BUILD DATABASE
 
     # Set up a database in which to store everything
-    if not database_dir or Path(database_dir).is_file():
-        os.makedirs('database', exist_ok=True)
-        database = DEFAULTDATABASE
+    if not output_dir or Path(output_dir).is_file():
+        output_dir = 'output'
+        os.makedirs('output', exist_ok=True)
     else:
-        os.makedirs(database_dir)
-        database = os.path.join(database_dir, 'tweet_links.db')
+        os.makedirs(output_dir, exist_ok=True)
+    database = os.path.join(output_dir, 'twitter_links.db')
 
     # Connect to the database
     connection = duckdb.connect(database=database, read_only=False)

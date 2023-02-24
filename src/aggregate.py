@@ -2,8 +2,7 @@ import os
 
 import duckdb
 
-from CONSTANTS import (AGGREGATEDDOMAINSTABLE, LINKSTABLENAME, MAINTABLENAME,
-                       PREPROCESSDIR)
+from CONSTANTS import (AGGREGATEDDOMAINSTABLE, LINKSTABLENAME, MAINTABLENAME)
 from utils import Timer
 
 
@@ -64,7 +63,7 @@ def domains(connection):
     timer.stop()
 
     # Write the aggregated domains table to a CSV
-    outfile_path = os.path.join(PREPROCESSDIR, 'domains.csv')
+    outfile_path = os.path.join('output', 'domains.csv')
     duckdb.table(
         table_name=AGGREGATEDDOMAINSTABLE,
         connection=connection

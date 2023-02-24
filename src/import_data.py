@@ -7,7 +7,7 @@ import pyarrow.parquet
 from rich.progress import (Progress, SpinnerColumn, TextColumn,
                            TimeElapsedColumn)
 
-from CONSTANTS import MAINTABLENAME, PREPROCESSDIR
+from CONSTANTS import MAINTABLENAME
 from utils import Timer
 
 # tweet column data fields
@@ -74,7 +74,7 @@ def select_columns(datapath):
 
 def csv_to_parquet(in_path):
     name = in_path.stem.split('.')[0]
-    out_path = os.path.join(PREPROCESSDIR, f'{name}.parquet')
+    out_path = os.path.join('output', f'{name}.parquet')
     convert_options = pyarrow.csv.ConvertOptions()
     convert_options.include_columns = [key for key in tweet_columns_dict.keys()]
     parser_options = pyarrow.csv.ParseOptions()
@@ -104,7 +104,7 @@ def import_data(connection):
 
     # Iteratively import pre-processed data
     # Note: looping is necessary to avoid memory problem
-    file_path_objects = list(Path(PREPROCESSDIR).glob('**/*.parquet'))
+    file_path_objects = list(Path('output').glob('**/*.parquet'))
     for i, path_obj in enumerate(file_path_objects):
         filepath = str(path_obj.resolve())
 
