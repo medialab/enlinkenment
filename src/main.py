@@ -13,14 +13,16 @@ from aggregate import domains
 @click.command()
 @click.argument('datapath')
 @click.option('-o', '--output-dir', required=False)
-def main(datapath, output_dir):
+@click.option("--save", is_flag=True, show_default=False, default=False)
+def main(datapath, output_dir, save):
     timer = Timer()
 
     # ------------------------------------------------------------------ #
     #                         PREPROCESS DATA
 
     # Make a directory in which to store pre-processed data
-    shutil.rmtree('output', ignore_errors=True)
+    if not save:
+        shutil.rmtree('output', ignore_errors=True)
     os.makedirs('output', exist_ok=True)
 
     # Isolate relevant columns using arrow csv parser

@@ -11,6 +11,12 @@ def domains(connection):
     # Establish every relation between a tweet and a domain
     timer = Timer('Relate tweets and domains')
     connection.execute(f"""
+    DROP TABLE IF EXISTS tweet_domain_relation
+    """)
+    connection.execute(f"""
+    DROP SEQUENCE IF EXISTS seq1;
+    """)
+    connection.execute(f"""
     CREATE SEQUENCE seq1;
     CREATE TABLE tweet_domain_relation(id BIGINT DEFAULT NEXTVAL('seq1'), tweet_id BIGINT, domain_id VARCHAR, domain_name VARCHAR);
     INSERT INTO tweet_domain_relation
@@ -30,6 +36,9 @@ def domains(connection):
         'nb_users_distinct':'UBIGINT'
     }
     column_string = ', '.join([f'{k} {v}' for k,v in domain_columns.items()])
+    connection.execute(f"""
+    DROP TABLE IF EXISTS {AGGREGATEDDOMAINSTABLE}
+    """)
     connection.execute(f"""
     CREATE TABLE {AGGREGATEDDOMAINSTABLE}({column_string})
     """)
