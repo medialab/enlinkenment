@@ -56,7 +56,14 @@ finished in 0:24:29
 ---
 ## Process
 
-### Pre-process data files
+### Pre-process & import
+Large CSV file(s) are opened and streamed in chunks using `pyarrow.csv.open_csv()`. Only a selection of the columns in the CSV are parsed:
+```
+['id', 'timestamp_utc', 'local_time', 'retweet_count', 'like_count', 'reply_count', 'user_id', 'user_followers', 'user_friends', 'retweeted_id', 'retweeted_user_id', 'quoted_id', 'quoted_user_id', 'links']
+```
+Chunks of the parsed data are iteratively added to a `pyarrow` table, using `pyarrow.Table.from_batches()`, which is then iteratively written to a parquet file in the created subdirectory `output/`. If the given input is a directory, the process is repeated for as many CSV data files are in the directory.
+
+The database management system `duckdb` then creates a temporary table from that parquet file. Finally, `duckdb` merges the temporary input table into a central table for all imported tweet data, avoiding any duplicates.
 ```mermaid
 flowchart TD
 
