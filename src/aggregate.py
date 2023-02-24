@@ -18,6 +18,10 @@ def domains(connection):
         'nb_collected_retweets_with_domain':'UBIGINT',
         'sum_all_tweets_with_domain':'UBIGINT',
         'nb_distinct_accounts_shared_domain':'UBIGINT',
+        'earliest_tweet':'DATETIME',
+        'latest_tweet':'DATETIME',
+        'days_between_first_and_last_tweet':'INTEGER',
+        'histogram_of_tweets_per_month':'VARCHAR',
     }
     column_string = ', '.join([f'{k} {v}' for k,v in domain_columns.items()])
     connection.execute(f"""
@@ -35,6 +39,10 @@ def domains(connection):
             COUNT(DISTINCT c.retweeted_id),
             COUNT(DISTINCT c.tweet_id),
             COUNT(DISTINCT c.user_id),
+            min(local_time),
+            max(local_time),
+            datediff('day', min(local_time), max(local_time)),
+            histogram(date_trunc('month', local_time)),
     FROM (
         SELECT  b.tweet_id,
                 a.user_id,
@@ -43,6 +51,7 @@ def domains(connection):
                 b.domain_name,
                 b.domain_id,
                 b.distinct_links,
+                a.local_time
         FROM {MAINTABLENAME} a
         JOIN (
             SELECT UNNEST(tweet_ids) as tweet_id, domain_id, domain_name, distinct_links
