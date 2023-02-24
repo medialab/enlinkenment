@@ -116,34 +116,33 @@ duckdb.from_arrow(arrow_object=aggregated_links_table, connection=connection).cr
 flowchart TD
 
 subgraph Database
-subgraph Tweets Table
-id[1234567890]
-links["https://www.google.com|https://www.github.com"]
+subgraph table : tweets
+id["id\n1234567890"]
+links["links\nhttps://www.google.com|https://www.github.com"]
 end
 links-->link1
 links-->link2
 
-subgraph Association Table
+subgraph table: link_tweet_relation
 subgraph row 1
-associationid1[pkey1]
-link1["https://www.google.com"]
-tweetid1[1234567890]
+associationid1["id\npkey1"]
+link1["link\nhttps://www.google.com"]
+tweetid1["tweet_id\n1234567890"]
 end
 subgraph row 2
-associationid2[pkey2]
-link2["https://www.github.com"]
-tweetid2[1234567890]
+associationid2["id\npkey2"]
+link2["link\nhttps://www.github.com"]
+tweetid2["tweet_id\n1234567890"]
 end
 end
-subgraph URL Parse Results Table
-col1[normalized_url]
-col2[domain_name]
-col3[link]
-col4[link_relation_ids]
+subgraph updated : link_tweet_relation
+col4["id\npkey1"]
+col3["link\nhttps://www.google.com"]
+tweetid3["tweet_id\n1234567890"]
+col1["normalized_url\ngoogle.com"]
+col2["domain_name\ngoogle.com"]
 pyarrowtable-->col1
 pyarrowtable-->col2
-pyarrowtable-->col3
-pyarrowtable-->col4
 end
 end
 
