@@ -56,24 +56,25 @@ def parse_urls(connection):
 
     timer = Timer('Parsing extracted links with URAL')
     # Create empty column arrays
-    link_list, normalized_url_list, domain_name_list, link_relation_ids = [], [], [], []
+    link_list, normalized_url_list, domain_name_list, link_relation_ids_list = [], [], [], []
     for tuple in track(link_aggregate):
         # Parse the row data
         raw_url = str(tuple[0])
         norm_url = ural_normalize_url(raw_url)
         domain = ural_get_domain_name(norm_url)
         relation_ids = [int(i) for i in tuple[1].split(',')]
-        # Add row data to the column's array
-        link_list.append(raw_url)
-        normalized_url_list.append(norm_url)
-        domain_name_list.append(domain)
-        link_relation_ids.append(relation_ids)
+        for id in relation_ids:
+            # Add row data to the column's array
+            link_list.append(raw_url)
+            normalized_url_list.append(norm_url)
+            domain_name_list.append(domain)
+            link_relation_ids_list.append(id)
     # Name columns
     table_column_names = [
         'normalized_url',
         'domain_name',
         'link',
-        'link_relation_ids',
+        'id',
     ]
     # Create Arrow table
     timer.stop()
@@ -84,7 +85,7 @@ def parse_urls(connection):
             pyarrow.array(normalized_url_list, type=pyarrow.string()),
             pyarrow.array(domain_name_list, type=pyarrow.string()),
             pyarrow.array(link_list, type=pyarrow.string()),
-            pyarrow.array(link_relation_ids, type=pyarrow.list_(pyarrow.int64())),
+            pyarrow.array(link_relation_ids_list, type=pyarrow.int64()),
         ],
         names=table_column_names
     )
@@ -119,13 +120,7 @@ def aggregating_links(connection):
             b.link,
             a.tweet_id,
     FROM {association_table} a
-    JOIN (
-        SELECT  UNNEST(link_relation_ids) as id,
-                link,
-                normalized_url,
-                domain_name,
-        FROM {parse_results_table}
-    ) b
+    JOIN {parse_results_table} b
     ON a.id = b.id
     """)
     timer.stop()
