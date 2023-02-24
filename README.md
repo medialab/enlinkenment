@@ -115,6 +115,7 @@ duckdb.from_arrow(arrow_object=aggregated_links_table, connection=connection).cr
 ```mermaid
 flowchart TD
 
+subgraph Database
 subgraph Tweets Table
 id[1234567890]
 links["https://www.google.com|https://www.github.com"]
@@ -134,8 +135,19 @@ link2["https://www.github.com"]
 tweetid2[1234567890]
 end
 end
+subgraph URL Parse Results Table
+col1[normalized_url]
+col2[domain_name]
+col3[link]
+col4[link_relation_ids]
+pyarrowtable-->col1
+pyarrowtable-->col2
+pyarrowtable-->col3
+pyarrowtable-->col4
+end
+end
 
-subgraph Parse URLs
+subgraph Parse URLs in Python
 link1--aggregate-->aggregate["(https://www.google.com, [pkey1])"]
 aggregate-->parser(URAL parsing)
 parser-->domain_name["domain name\ngoogle.com"]
@@ -143,22 +155,12 @@ parser-->normalized_url["normalized URL\ngoogle.com"]
 parser-->link["link\nhttps://www.google.com"]
 parser-->associationid["list of association ids\n[pkey1]"]
 pyarrowtable[pyarrow table]
-domain_name-->pyarrowtable
-normalized_url-->pyarrowtable
-link-->pyarrowtable
-associationid-->pyarrowtable
+deaggregate("de-aggregate links")
+deaggregate-->pyarrowtable
+domain_name-->deaggregate
+normalized_url-->deaggregate
+link-->deaggregate
+associationid-->deaggregate
 end
 
-pyarrowtable-->duckdb(write to disk/database)
-
-subgraph URL Parse Results Table
-col1[normalized_url]
-col2[domain_name]
-col3[link]
-col4[link_relation_ids]
-duckdb-->col1
-duckdb-->col2
-duckdb-->col3
-duckdb-->col4
-end
 ```
