@@ -4,6 +4,7 @@ from rich.progress import track
 from ural import get_domain_name as ural_get_domain_name
 from ural import normalize_url as ural_normalize_url
 from ural.youtube import YOUTUBE_DOMAINS
+import os
 
 from CONSTANTS import LINKSTABLENAME, MAINTABLENAME
 from utils import Timer
@@ -55,7 +56,7 @@ def parse_urls(connection):
 
     timer = Timer('Parsing extracted links with URAL')
     # Create empty column arrays
-    link_list, normalized_url_list, domain_name_list, link_relation_ids_list = [], [], [], []
+    normalized_url_list, domain_name_list, link_relation_ids_list = [], [], []
     for tuple in track(link_aggregate):
         # Parse the row data
         raw_url = str(tuple[0])
@@ -66,7 +67,6 @@ def parse_urls(connection):
         relation_ids = [int(i) for i in tuple[1].split(',')]
         for id in relation_ids:
             # Add row data to the column's array
-            link_list.append(raw_url)
             normalized_url_list.append(norm_url)
             domain_name_list.append(domain)
             link_relation_ids_list.append(id)
@@ -74,26 +74,36 @@ def parse_urls(connection):
     table_column_names = [
         'normalized_url',
         'domain_name',
-        'link',
         'id',
     ]
     # Create Arrow table
     timer.stop()
 
     timer = Timer('Writing parsed URL data to pyarrow table')
-    pyarrow_links_table = pyarrow.table(
+    pyarrow_links_table = pyarrow.Table.from_arrays(
         [
             pyarrow.array(normalized_url_list, type=pyarrow.string()),
             pyarrow.array(domain_name_list, type=pyarrow.string()),
-            pyarrow.array(link_list, type=pyarrow.string()),
             pyarrow.array(link_relation_ids_list, type=pyarrow.int64()),
         ],
         names=table_column_names
     )
     timer.stop()
 
-    timer = Timer('Writing to disk/database pyarrow table')
-    duckdb.from_arrow(arrow_object=pyarrow_links_table, connection=connection).create(table_name=parse_results_table)
+    timer = Timer('Writing pyarrow table to parquet file')
+    out_path = os.path.join('output', 'parsed_urls.parquet')
+    pyarrow.parquet.write_table(pyarrow_links_table, out_path)
+    timer.stop()
+
+    timer = Timer('Inesrt parquet file contents to database')
+    connection.execute(f"""
+    CREATE TABLE {parse_results_table}(normalized_url VARCHAR, domain_name VARCHAR, id VARCHAR);
+    """)
+    connection.execute(f"""
+    INSERT INTO {parse_results_table}
+    SELECT *
+    FROM read_parquet('{out_path}');
+    """)
     timer.stop()
 
     timer = Timer('Updating link-tweet association table')

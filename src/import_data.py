@@ -15,12 +15,12 @@ tweet_columns_dict = {
     'id':'UBIGINT',
     'timestamp_utc':'UBIGINT',
     'local_time': 'DATETIME',
-    'retweet_count':'INTEGER',
-    'like_count':'INTEGER',
-    'reply_count':'INTEGER',
+    'retweet_count':'VARCHAR',
+    'like_count':'VARCHAR',
+    'reply_count':'VARCHAR',
     'user_id':'VARCHAR',
-    'user_followers':'INTEGER',
-    'user_friends':'INTEGER',
+    'user_followers':'VARCHAR',
+    'user_friends':'VARCHAR',
     'retweeted_id':'VARCHAR',
     'retweeted_user_id':'VARCHAR',
     'quoted_id':'VARCHAR',
@@ -77,6 +77,7 @@ def csv_to_parquet(in_path):
     out_path = os.path.join('output', f'{name}.parquet')
     convert_options = pyarrow.csv.ConvertOptions()
     convert_options.include_columns = [key for key in tweet_columns_dict.keys()]
+    convert_options.null_values = ['0']
     parser_options = pyarrow.csv.ParseOptions()
     parser_options.newlines_in_values = True
     writer = None
@@ -98,6 +99,9 @@ def import_data(connection):
     # in which to store all imported Tweet data
     timer = Timer('Creating main table')
     connection.execute(f"""
+    DROP TABLE IF EXISTS {MAINTABLENAME};
+    """)
+    connection.execute(f"""
     CREATE TABLE IF NOT EXISTS {MAINTABLENAME}({input_columns_string});
     """)
     timer.stop()
@@ -110,26 +114,9 @@ def import_data(connection):
 
         timer = Timer(f'Importing data to database, file {i+1} of {len(file_path_objects)}')
         connection.execute(f"""
-        DROP TABLE IF EXISTS input;
-        """)
-        connection.execute(f"""
-        CREATE TABLE input
-        AS SELECT *
+        INSERT INTO {MAINTABLENAME}
+        SELECT *
         FROM read_parquet('{filepath}')
         WHERE links IS NOT NULL;
-        """)
-        timer.stop()
-
-        timer = Timer('Merge imported data to main table')
-        connection.execute(f"""
-        INSERT INTO {MAINTABLENAME}
-        SELECT DISTINCT input.*
-        FROM input
-        LEFT JOIN {MAINTABLENAME}
-        ON input.id = {MAINTABLENAME}.id
-        WHERE {MAINTABLENAME}.id IS NULL
-        """)
-        connection.execute(f"""
-        DROP TABLE input
         """)
         timer.stop()
