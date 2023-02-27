@@ -11,6 +11,7 @@ from utils import Timer
 
 association_table = 'link_tweet_relation'
 parse_results_table = 'url_parse_results'
+parsed_url_parquet_file = os.path.join('output', 'parsed_urls.parquet')
 
 
 def parse_urls(connection):
@@ -91,66 +92,36 @@ def parse_urls(connection):
     timer.stop()
 
     timer = Timer('Writing pyarrow table to parquet file')
-    out_path = os.path.join('output', 'parsed_urls.parquet')
-    pyarrow.parquet.write_table(pyarrow_links_table, out_path)
-    timer.stop()
-
-    timer = Timer('Inesrt parquet file contents to database')
-    connection.execute(f"""
-    CREATE TABLE {parse_results_table}(normalized_url VARCHAR, domain_name VARCHAR, id VARCHAR);
-    """)
-    connection.execute(f"""
-    INSERT INTO {parse_results_table}
-    SELECT *
-    FROM read_parquet('{out_path}');
-    """)
-    timer.stop()
-
-    timer = Timer('Updating link-tweet association table')
-    # Add normalized url
-    connection.execute(f"""
-    ALTER TABLE {association_table}
-        ADD COLUMN normalized_url VARCHAR;
-    """)
-    connection.execute(f"""
-    UPDATE {association_table}
-        SET normalized_url = {parse_results_table}.normalized_url
-        FROM {parse_results_table}
-        WHERE {association_table}.id = {parse_results_table}.id
-    """)
-    # Add id for normalized url
-    connection.execute(f"""
-    ALTER TABLE {association_table}
-        ADD COLUMN normalized_id VARCHAR;
-    """)
-    connection.execute(f"""
-    UPDATE {association_table}
-        SET normalized_id = md5(normalized_url)
-    """)
-    # Add domain name
-    connection.execute(f"""
-    ALTER TABLE {association_table}
-        ADD COLUMN domain_name VARCHAR;
-    """)
-    connection.execute(f"""
-    UPDATE {association_table}
-        SET domain_name = {parse_results_table}.domain_name
-        FROM {parse_results_table}
-        WHERE {association_table}.id = {parse_results_table}.id
-    """)
-    # Add id for domain name
-    connection.execute(f"""
-    ALTER TABLE {association_table}
-        ADD COLUMN domain_id VARCHAR;
-    """)
-    connection.execute(f"""
-    UPDATE {association_table}
-        SET domain_id = md5(domain_name)
-    """)
+    pyarrow.parquet.write_table(pyarrow_links_table, parsed_url_parquet_file)
     timer.stop()
 
 def aggregating_links(connection):
-    timer = Timer('Aggregating links in table')
+
+    timer = Timer('Joining association table with parsed URL results')
+    connection.execute(f"""
+    DROP TABLE IF EXISTS {parse_results_table};
+    CREATE TABLE {parse_results_table}(
+        normalized_url_id VARCHAR,
+        normalized_url VARCHAR,
+        link VARCHAR,
+        domain_name VARCHAR,
+        tweet_id UBIGINT);
+    """)
+    connection.execute(f"""
+    INSERT INTO {parse_results_table}
+    SELECT
+        md5(p.normalized_url) as normalized_url_id,
+        p.normalized_url as normalized_url,
+        a.link as link,
+        p.domain_name as domain_name,
+        a.tweet_id as tweet_id
+    FROM read_parquet('{parsed_url_parquet_file}') p
+    INNER JOIN {association_table} a
+    ON p.id = a.id
+    """)
+    timer.stop()
+
+    timer = Timer('Aggregating parsed URL results')
     links_column_dict = {
         'id':'VARCHAR PRIMARY KEY',
         'normalized_url':'VARCHAR',
@@ -168,13 +139,13 @@ def aggregating_links(connection):
     """)
     connection.execute(f"""
     INSERT INTO {LINKSTABLENAME}
-    SELECT  normalized_id as id,
+    SELECT  md5(normalized_url_id) as id,
             ANY_VALUE(normalized_url) as normalized_url,
             ANY_VALUE(domain_name) as domain_name,
-            ANY_VALUE(domain_id) as domain_id,
+            md5(ANY_VALUE(domain_name)) as domain_id,
             ARRAY_AGG(DISTINCT tweet_id) as tweet_ids,
             ARRAY_AGG(DISTINCT link) as distinct_links,
-    FROM {association_table}
-    GROUP BY normalized_id
+    FROM {parse_results_table}
+    GROUP BY normalized_url_id
     """)
     timer.stop()
