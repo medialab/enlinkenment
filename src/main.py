@@ -12,16 +12,17 @@ from aggregate import domains
 
 @click.command()
 @click.argument('datapath')
-@click.option('-o', '--output-dir', required=False)
-@click.option("--save", is_flag=True, show_default=False, default=False)
-def main(datapath, output_dir, save):
+@click.option('-d', '--database-dir', required=False)
+@click.option('--save-data', is_flag=True, show_default=False, default=False)
+@click.option('--save-database', is_flag=True, show_default=False, default=False)
+def main(datapath, database_dir, save_data, save_database):
     timer = Timer()
 
     # ------------------------------------------------------------------ #
     #                         PREPROCESS DATA
 
     # Make a directory in which to store pre-processed data
-    if not save:
+    if not save_data:
         shutil.rmtree('output', ignore_errors=True)
     os.makedirs('output', exist_ok=True)
 
@@ -31,13 +32,17 @@ def main(datapath, output_dir, save):
     # ------------------------------------------------------------------ #
     #                         BUILD DATABASE
 
-    # Set up a database in which to store everything
-    if not output_dir or Path(output_dir).is_file():
-        output_dir = 'output'
-        os.makedirs('output', exist_ok=True)
+    # Get the name of the database directory
+    if not database_dir or Path(database_dir).is_file():
+        database_dir = 'database'
+    # If not saving prior relations, remove the database directory if it exists
+    if not save_database:
+        shutil.rmtree(database_dir, ignore_errors=True)
+    # Otherwise, confirm that the database directory exists
     else:
-        os.makedirs(output_dir, exist_ok=True)
-    database = os.path.join(output_dir, 'twitter_links.db')
+        os.makedirs(database_dir, exist_ok=True)
+    # Name the database file that goes inside the database directory
+    database = os.path.join(database_dir, 'twitter_links.db')
 
     # Connect to the database
     connection = duckdb.connect(database=database, read_only=False)
