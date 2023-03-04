@@ -1,8 +1,10 @@
 import os
 
 MAINTABLENAME = 'tweets'
-LINKSTABLENAME = 'links'
-AGGREGATEDDOMAINSTABLE = 'aggregated_domains'
+DOMAINTABLE = 'domains'
+FREQUENCYTABLE = 'tweets_per_month'
+JOINEDDOMAINFREQUENCYTABLE = 'domains_and_frequency'
+
 
 TWEET = {
     'id':'UBIGINT PRIMARY KEY',
