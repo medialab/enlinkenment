@@ -36,7 +36,7 @@ select_columns = [
 
 select_columns_without_links = ', '.join(select_columns[:-1])
 
-columns = {
+main_columns = {
     'tweet_id':'VARCHAR',
     'timestamp_utc':'VARCHAR',
     'local_time':'DATETIME',
@@ -56,13 +56,15 @@ columns = {
     }
 
 
-def parse_raw_data(datapath, file_pattern, connection):
+def parse_raw_data(datapath, file_pattern, duckdb_connection):
     """Iterate through Tweet data files and import into a main table."""
 
     timer = Timer('Creating main table')
-    column_datatype_pairs = [f'{k} {v}' for k,v in columns.items()]
-    connection.execute(f"""
+    column_datatype_pairs = [f'{k} {v}' for k,v in main_columns.items()]
+    duckdb_connection.execute(f"""
     DROP TABLE IF EXISTS {MAINTABLENAME};
+    """)
+    duckdb_connection.execute(f"""
     CREATE TABLE IF NOT EXISTS {MAINTABLENAME}({', '.join(column_datatype_pairs)});
     """)
     timer.stop()
@@ -89,22 +91,22 @@ def parse_raw_data(datapath, file_pattern, connection):
             task_stream = progress_bars.add_task(f'[red]Streaming CSV...', start=False)
             task_explode = progress_bars.add_task(f'[yellow]Exploding links...', start=False)
             task_parse = progress_bars.add_task(f'[green]Parsing URLs...', start=False)
-            task_import = progress_bars.add_task(f'[blue]Importing data...', start=False)
+            task_import = progress_bars.add_task(f'[blue]Import data...', start=False)
             # Write selected CSV columns to parquet file
             progress_bars.start_task(task_id=task_stream)
-            parquet_file = csv_to_parquet(fp)
+            parquet_file_path = csv_to_parquet(fp)
             progress_bars.stop_task(task_id=task_stream)
             # Explode links in parquet file
             progress_bars.start_task(task_id=task_explode)
-            explode_links(parquet_file, connection)
+            explode_links(parquet_file_path, duckdb_connection)
             progress_bars.stop_task(task_id=task_explode)
-            # Parse URLs in database
+            # Parse URLs
             progress_bars.start_task(task_id=task_parse)
-            polars_df = parse_links(connection)
+            df = parse_links(duckdb_connection)
             progress_bars.stop_task(task_id=task_parse)
-            # Import data
+            # Import data to DuckDB concatenated table
             progress_bars.start_task(task_id=task_import)
-            insert_data(connection)
+            import_data(duckdb_connection, df)
             progress_bars.stop_task(task_id=task_import)
     timer.stop()
 
@@ -180,9 +182,9 @@ def parse_links(connection):
     return df
 
 
-def insert_data(connection):
+def import_data(connection, df):
+    df = df
     connection.execute(f"""
     INSERT INTO {MAINTABLENAME}
-    SELECT *
-    FROM polars_df
+    SELECT * FROM df
     """)
