@@ -20,7 +20,7 @@ from aggregate_data import DOMAIN_AGGREGATION
 @click.option('-o', '--output-dir', type=click.types.STRING, default='output', show_default=True)
 @click.option('--skip-preprocessing', is_flag=True, show_default=False, default=False)
 def main(data, glob_file_pattern, database_name, output_dir, skip_preprocessing):
-    timer = Timer()
+    global_timer = Timer()
 
     # ------------------------------------------------------------------ #
     #                          BUILD DATABASES
@@ -89,7 +89,7 @@ def main(data, glob_file_pattern, database_name, output_dir, skip_preprocessing)
     )
 
     print("---------------------------------------------")
-    timer.stop()
+    global_timer.stop()
 
 
 if __name__ == "__main__":
