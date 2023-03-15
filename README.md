@@ -33,23 +33,31 @@ A modular workflow for parsing and enriching URL data.
 
 ### Input Data
 
-1. Stream the CSV and select the relevant columns. Save them to a parquet file.
-    - 3.5 - 4 minutes (for a file of ~26 GB)
+- For each CSV file:
 
-2. Using `duckdb`, parse the parquet file and explode concatenated links in a tweet's `links` column.
-    - 20-30 seconds
+    1. Stream the file and select the relevant columns. Save them to a parquet file.
+        - 3.5 - 4 minutes (for a file of ~26 GB)
 
-3. Parse those exploded links with `ural` and write the result to a new parquet file.
-    - 7 - 15 minutes (depends on how many URLs are in the month's data)
+    2. Using `duckdb`, parse the parquet file and explode concatenated links in a tweet's `links` column.
+        - 20-30 seconds
 
-4. Write the parsed URLs to a parquet file.
-    - ~20 seconds
+    3. Parse those exploded links with `ural` and write the result to a new parquet file.
+        - 7 - 15 minutes (depends on how many URLs are in the month's data)
 
-5. Parse the `local_time` field in all the processed parquet files and get a set of all the months in the data.
+    4. Write the parsed URLs to a parquet file.
+        - ~20 seconds
 
-6. Create tables in the database for each month.
+- For each pre-processed data file (1st loop)
 
-7. Again, parse the processed URL parquet file. This time, input the data in the proper month's table.
+    5. Parse the `local_time` field to get a set of all the months in the data
+
+- For every month in the set
+
+    6. Create a table in the database, titled MonthYear. (eg. March2023)
+
+- For each pre-processed data file (2nd loop)
+
+    7. Insert the data into the proper month's table.
 
 ### Aggregate Data
 
