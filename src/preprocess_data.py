@@ -20,7 +20,6 @@ from rich.progress import (BarColumn, MofNCompleteColumn, Progress,
                            SpinnerColumn, TextColumn, TimeElapsedColumn)
 
 
-# 
 def process_data(data, file_pattern, output_dir):
     """Main function parse Tweet data."""
 
@@ -188,19 +187,19 @@ def insert_processed_data(connection, output_dir):
 
         task2 = progress.add_task('[green]Create table...', total=len(all_months))
         task3 = progress.add_task('[blue]Insert data...', total=len(months_per_file))
-        columns = ', '.join([k+' '+v for k,v in MAIN_TABLE_DATA_TYPES.items()])
+
+        base_main_columns = ', '.join([k+' '+v for k,v in MAIN_TABLE_DATA_TYPES.items()])
+
         for month in list(set(all_months)):
-            table_name = datetime.datetime.strftime(month, "%B")+\
-                    datetime.datetime.strftime(month, "%Y")
+            table_name = extract_month_year(month)
             connection.execute(f"""
-            CREATE TABLE {table_name}({columns});
+            CREATE TABLE {table_name}({base_main_columns});
             """)
             progress.update(task_id=task2, advance=1)
 
         for parquet_filepath, months in months_per_file.items():
             for month in months:
-                table_name = table_name = datetime.datetime.strftime(month, "%B")+\
-                    datetime.datetime.strftime(month, "%Y")
+                table_name = extract_month_year(month)
                 connection.execute(f"""
                 INSERT INTO {table_name}
                 SELECT *
@@ -210,3 +209,9 @@ def insert_processed_data(connection, output_dir):
                 print(f'created table: {table_name}')
                 print(duckdb.table(table_name, connection).describe())
                 progress.update(task_id=task3, advance=1)
+
+    return [(month, extract_month_year(month)) for month in sorted(all_months)]
+
+
+def extract_month_year(datetime_obj):
+    return datetime.datetime.strftime(datetime_obj, "%B")+datetime.datetime.strftime(datetime_obj, "%Y")

@@ -25,7 +25,7 @@ FREQUENCY_TABLE = 'frequency_tbl'
 DOMAIN_TABLE_DATA_TYPES = {
     'domain_id':'VARCHAR',
     'domain_name': 'VARCHAR',
-    'nb_links_from_domain':'UBIGINT',
+    'nb_distinct_links_from_domain':'UBIGINT',
     'nb_collected_retweets_with_domain':'UBIGINT',
     'sum_all_tweets_with_domain':'UBIGINT',
     'nb_accounts_that_shared_domain_link':'UBIGINT',

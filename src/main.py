@@ -6,11 +6,8 @@ import duckdb
 
 from aggregate_data import aggregate_domains, sum_aggregates
 from preprocess_data import insert_processed_data, process_data
-from utils import Timer, write_output, list_tables
+from utils import Timer, write_output
 from constants import DOMAIN_TABLE
-
-from constants import DOMAIN_TABLE_DATA_TYPES
-from aggregate_data import DOMAIN_AGGREGATION
 
 
 @click.command()
@@ -62,7 +59,7 @@ def main(data, glob_file_pattern, database_name, output_dir, skip_preprocessing)
     #                          AGGREGATE DATA
 
     timer = Timer(f'----------------------------------------\nInsert data')
-    insert_processed_data(
+    months = insert_processed_data(
         connection=duckdb_connection,
         output_dir=output_dir
     )
@@ -71,11 +68,14 @@ def main(data, glob_file_pattern, database_name, output_dir, skip_preprocessing)
     timer = Timer(f'----------------------------------------\nAggregate months')
     aggregate_domains(
         connection=duckdb_connection,
+        months=months
     )
     timer.stop()
 
     timer = Timer(f'----------------------------------------\nSum aggregates')
-    sum_aggregates(connection=duckdb_connection)
+    sum_aggregates(
+        connection=duckdb_connection,
+        months=months)
     timer.stop()
 
     # ------------------------------------------------------------------ #
