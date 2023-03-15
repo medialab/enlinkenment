@@ -106,5 +106,9 @@ April2022_August2022 --> August2022_December2022
 repeat_October2022_December2022 --> August2022_December2022
 end
 
+subgraph create output table
+August2022_December2022 --> domains
+end
+
 
 ```
