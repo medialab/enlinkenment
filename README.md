@@ -97,8 +97,6 @@ total time: 00:00:51
     - Group by `domain_name` and aggregate the desired fields (eg. sum on `retweet_id`)
         - < 1 minute
 
-```
-
 2. Iteratively pair up months
     - Sum 2 aggregated month tables
         - ~ 3 seconds (for all iterations, pairs)
