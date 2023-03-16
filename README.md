@@ -24,6 +24,21 @@ A modular workflow for parsing and enriching URL data.
     python src/main.py ./DATA/DIRECTORY/
     ```
 
+## Output : `domains.csv`
+
+- domain_id
+- domain_name
+- nb_distinct_links_from_domain
+- nb_collected_retweets_with_domain
+- sum_all_tweets_with_domain
+- nb_accounts_that_shared_domain_link
+- nb_tweets_in_MonthYEAR
+
+... etc.
+- nb_collected_original_tweets_with_domain
+- median_of_tweets_per_month
+- nb_months_with_tweet
+
 ---
 ## Performance
 
@@ -157,6 +172,5 @@ end
 subgraph create output table
 August2022_December2022 --> domains
 end
-
 
 ```
