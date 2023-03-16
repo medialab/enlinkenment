@@ -149,12 +149,6 @@ The aggregation selects from a table containing all the tweets and exploded link
 
 ### `INSERT INTO` table
 The result is a table grouped by domain with calculations for aggregated fields.
-    'domain_id':'VARCHAR',
-    'domain_name': 'VARCHAR',
-    'nb_distinct_links_from_domain':'UBIGINT',
-    'nb_collected_retweets_with_domain':'UBIGINT',
-    'sum_all_tweets_with_domain':'UBIGINT',
-    'nb_accounts_that_shared_domain_link':'UBIGINT',
 
 |domain_id|domain_name|nb_distinct_links_from_domain|nb_collected_retweets_with_domain|sum_all_tweets_with_domain|nb_accounts_that_shared_domain_link|nb_tweets_in_January2023|nb_tweets_in_February2023|nb_tweets_in_March2023|
 |--|--|--|--|--|--|--|--|--|
