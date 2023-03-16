@@ -84,36 +84,36 @@ total time: 00:00:51
     2. Using `duckdb`, parse the parquet file and explode concatenated links in a tweet's `links` column.
         - 20-30 seconds
 
-    3. Parse those exploded links with `ural` and write the result to a new parquet file.
+    3. Parse those exploded links with `ural`.
         - 7 - 15 minutes (depends on how many URLs are in the month's data)
 
     4. Write the parsed URLs to a parquet file.
         - ~20 seconds
 
-- For each pre-processed data file (1st loop)
+- For each pre-processed data file (1st loop):
 
-    5. Parse the `local_time` field to get a set of all the months in the data
+    5. Parse the `local_time` field to get a set of all the months in the data.
         - < 10 seconds
 
-- For every month in the set
+- For every month in the set:
 
     6. Create a table in the database, titled MonthYear. (eg. March2023)
         - 0 seconds
 
-- For each pre-processed data file (2nd loop)
+- For each pre-processed data file (2nd loop):
 
-    7. Insert the tweet data into the proper month's table.
+    7. Reading the processed results from the parquet file, insert the data into the proper month table.
         - ~13 minutes
 
 ### Aggregate data
 
-1. For every month table
+1. For every month table in the database:
 
-    - Group by `domain_name` and aggregate the desired fields (eg. sum on `retweet_id`)
+    - Group by `domain_name` and aggregate the desired fields (eg. count distinct `retweeted_id` --> `nb_collected_retweets_with_domain`)
         - < 1 minute
 
-2. Iteratively pair up months
-    - Sum 2 aggregated month tables
+2. Iteratively pair up months:
+    - Sum 2 aggregated month tables (eg. sum `nb_collected_retweets_with_domain`)
         - ~ 3 seconds (for all iterations, pairs)
 
 ```mermaid
