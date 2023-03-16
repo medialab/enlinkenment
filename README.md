@@ -138,6 +138,30 @@ WHERE domain_name IS NOT NULL
 GROUP BY domain_name;
 ```
 
+### `FROM` table
+The aggregation selects from a table containing all the tweets and exploded links from a given month, i.e. February 2023.
+|tweet_id|local_time|user_id|retweeted_id|link|normalized_url|domain_name|
+|--|--|--|--|--|--|--|
+1488285970210471944|2022-02-01T00:00:00|572770254|1488234322142375939|`https://github.com/medialab/enlinkenment`|`github.com/medialab/enlinkenment`|`github.com`
+1488285969912672257|2022-02-01T00:00:00|4892727543|NULL|`https://www.lemonde.fr/`|`lemonde.fr`|`lemonde.fr`
+1488285969912672257|2022-02-01T00:00:00|4892727543|NULL|`https://www.lefigaro.fr/`|`lefigaro.fr`|`lefigaro.fr`
+1488285969740673027|2022-02-01T00:00:00|1488285969652621312|NULL|`https://www.lemonde.fr/`|`lemonde.fr`|`lemonde.fr`
+
+### `INSERT INTO` table
+The result is a table grouped by domain with calculations for aggregated fields.
+    'domain_id':'VARCHAR',
+    'domain_name': 'VARCHAR',
+    'nb_distinct_links_from_domain':'UBIGINT',
+    'nb_collected_retweets_with_domain':'UBIGINT',
+    'sum_all_tweets_with_domain':'UBIGINT',
+    'nb_accounts_that_shared_domain_link':'UBIGINT',
+
+|domain_id|domain_name|nb_distinct_links_from_domain|nb_collected_retweets_with_domain|sum_all_tweets_with_domain|nb_accounts_that_shared_domain_link|nb_tweets_in_January2023|nb_tweets_in_February2023|nb_tweets_in_March2023|
+|--|--|--|--|--|--|--|--|--|
+99cd2175108d157588c04758296d1cfc|github.com|1|1|1|1|0|1|0|
+faf9edb7a08ae4e8b56fc67a6ec6b45d|lemonde.fr|1|0|2|2|0|1|0|
+e396f0b50ee394ef1ba57233d31a32aa|lefigaro.fr|1|0|1|1|0|1|0|
+
 2. Iteratively pair up months:
     - Sum 2 aggregated month tables (eg. sum `nb_collected_retweets_with_domain`)
         - ~ 3 seconds (for all iterations, pairs)
