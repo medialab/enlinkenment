@@ -57,9 +57,15 @@ A modular workflow for parsing and enriching URL data.
 
 - For each pre-processed data file (2nd loop)
 
-    7. Insert the data into the proper month's table.
+    7. Insert the tweet data into the proper month's table.
 
 ### Aggregate Data
+
+1. For every month table
+
+    - Group by `domain_name` and aggregate the desired fields (eg. sum on `retweet_id`)
+
+2. Combine the aggregated month tables.
 
 ```mermaid
 flowchart LR
