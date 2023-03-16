@@ -97,6 +97,12 @@ total time: 00:00:51
     - Group by `domain_name` and aggregate the desired fields (eg. sum on `retweet_id`)
         - < 1 minute
 
+Below, see the result of the group-by function for the domain `github.com`. In this example, one tweet originally contained two links (both from `github.com`) and another contained one link (from `lemonde.fr`). Through the previous processing, the first tweet's concatenated links were exploded and moved onto separate rows in the month's table.
+|id|...|links|
+|--|--|--|
+`123456789`|...|`https://github.com/medialab\|https://github.com/medialab/enlinkenment`
+`987654321`|...|`https://lemonde.fr`
+
 ```mermaid
 flowchart LR
 
