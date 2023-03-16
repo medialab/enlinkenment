@@ -26,6 +26,8 @@ A modular workflow for parsing and enriching URL data.
 
 ## Output : `domains.csv`
 
+The script writes the database's `domains` table to a CSV file with the following data fields:
+
 - domain_id
 - domain_name
 - nb_distinct_links_from_domain
@@ -38,6 +40,12 @@ A modular workflow for parsing and enriching URL data.
 - nb_collected_original_tweets_with_domain
 - median_of_tweets_per_month
 - nb_months_with_tweet
+
+The CSV file is ordered by `nb_accounts_that_shared_domain_link` so that the domain whose links the most number of unique users tweeted is the first row. There is a varying number of columns in the out-file because it adapts to the number of months in the data, as represented by the generic column name `nb_tweets_in_MonthYEAR`. If the tweet data were from the months January 2023 and February 2023, the columns listed above would include the following:
+- nb_tweets_in_January2023
+- nb_tweets_in_February2023
+
+And the maximum value in the column `nb_months_with_tweet` would be 2.
 
 ---
 ## Performance
