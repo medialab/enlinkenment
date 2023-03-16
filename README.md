@@ -97,6 +97,78 @@ total time: 00:00:51
     - Group by `domain_name` and aggregate the desired fields (eg. sum on `retweet_id`)
         - < 1 minute
 
+```mermaid
+flowchart LR
+
+subgraph month table
+
+subgraph domain
+domain_name1[github.com]
+domain_name2[lemonde.fr]
+domain_name3[github.com]
+end
+subgraph normalized_url
+normalized_url1[github.com/medialab]
+normalized_url2[lemonde.fr]
+normalized_url3[github.com/medialab/enlinkenment]
+end
+subgraph link
+link1[https://github.com/medialab]
+link2[https://lemonde.fr]
+link3[https://github.com/medialab/enlinkenment]
+end
+subgraph retweeted_id
+retweeted_id1[NULL]
+retweeted_id2[0192837465]
+retweeted_id3[NULL]
+end
+subgraph user_id
+user_id1[000000000]
+user_id2[111111111]
+user_id3[000000000]
+end
+subgraph local_time
+local_time1[2022-01-01]
+local_time2[2022-01-01]
+local_time3[2022-01-01]
+end
+subgraph tweet_id
+tweet_id1[123456789]
+tweet_id2[987654321]
+tweet_id3[123456789]
+end
+end
+
+
+subgraph aggregate on domain github.com
+subgraph domain_id
+domain_name1 --> domain_id1["md5(domain_name)\nH5092MNFLIJAG5678"]
+domain_name3 --> domain_id1
+end
+subgraph domain_name
+domain_name1 --> domain_name1_agg[github.com]
+domain_name3 --> domain_name1_agg
+end
+subgraph nb_distinct_links_from_domain
+normalized_url1 --> count_links["COUNT(DISTINCT normalized_url)\n2"]
+normalized_url3 --> count_links
+end
+subgraph nb_collected_retweets_with_domain
+retweeted_id1 --> count_retweets["COUNT(DISTINCT retweeted_id)\n0"]
+retweeted_id3 --> count_retweets
+end
+subgraph sum_all_tweets_with_domain
+tweet_id1 --> count_tweet_id["COUNT(DISTINCT tweet_id)\n1"]
+tweet_id3 --> count_tweet_id
+end
+subgraph nb_accounts_that_shared_domain_link
+user_id1 --> count_users["COUNT(DISTINCT user_id)\n1"]
+user_id3 --> count_users
+end
+end
+
+```
+
 2. Iteratively pair up months
     - Sum 2 aggregated month tables
         - ~ 3 seconds (for all iterations, pairs)
