@@ -32,8 +32,6 @@ def aggregate_domains(connection, months):
         month_columns = ', '.join([f'nb_tweets_in_{month} UBIGINT' for _, month in months])
         columns = base_domain_columns+', '+month_columns
 
-        
-
         for table in tables:
             agg_table = f'domains_in_{table}'
             connection.execute(f"""
