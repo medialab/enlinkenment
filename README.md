@@ -19,9 +19,9 @@ A modular workflow for parsing and enriching URL data.
     ```shell
     pip install -r requirements.txt
     ```
-3. Run the process [`src/main.py`](src/main.py) on your data file or on a directory containing data files with a `.csv` or `.gz` extension.
+3. Run the process [`src/main.py`](src/main.py) on your data file or on a directory containing data files with a `.csv` or `.gz` extension. A Google key is necessary to access YouTube information.
     ```shell
-    python src/main.py ./DATA/DIRECTORY/
+    python src/main.py ./DATA/DIRECTORY/ -k GOOGLEKEY
     ```
 
 ## Output : `domains.csv`
@@ -34,18 +34,14 @@ The script writes the database's `domains` table to a CSV file with the followin
 - nb_collected_retweets_with_domain
 - sum_all_tweets_with_domain
 - nb_accounts_that_shared_domain_link
-- nb_tweets_in_MonthYEAR
+- nb_tweets_in_YEAR_MONTH
 
 ... etc.
 - nb_collected_original_tweets_with_domain
-- median_of_tweets_per_month
-- nb_months_with_tweet
 
-The CSV file is ordered by `nb_accounts_that_shared_domain_link` so that the domain whose links the most number of unique users tweeted is the first row. There is a varying number of columns in the out-file because it adapts to the number of months in the data, as represented by the generic column name `nb_tweets_in_MonthYEAR`. If the tweet data were from the months January 2023 and February 2023, the columns listed above would include the following:
+The CSV file is ordered by `nb_accounts_that_shared_domain_link` so that the domain whose links the most number of unique users tweeted is the first row. There is a varying number of columns in the out-file because it adapts to the number of months in the data, as represented by the generic column name `nb_tweets_in_YEAR_MONTH`. If the tweet data were from the months January 2023 and February 2023, the columns listed above would include the following:
 - nb_tweets_in_January2023
 - nb_tweets_in_February2023
-
-And the maximum value in the column `nb_months_with_tweet` would be 2.
 
 ---
 ## Performance
