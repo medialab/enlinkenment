@@ -5,7 +5,7 @@ from rich.progress import (BarColumn, MofNCompleteColumn, Progress, TextColumn,
                            TimeElapsedColumn)
 
 from utilities import get_filepaths, name_table
-from aggregate_domains import list_tables
+from domains import list_tables
 
 
 def insert_processed_data(connection:duckdb, input_dir:Path, input_file_pattern:str):

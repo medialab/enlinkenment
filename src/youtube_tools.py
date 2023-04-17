@@ -1,8 +1,8 @@
 import ural.youtube
-from ural.youtube import YoutubeChannel, YoutubeVideo
+from minet.youtube import YouTubeAPIClient
 from minet.youtube.client import forge_channels_url, forge_videos_url
 from minet.youtube.scrapers import scrape_channel_id
-from minet.youtube import YouTubeAPIClient
+from ural.youtube import YoutubeChannel, YoutubeVideo
 
 
 def get_youtube_metadata(url:str, config:dict):
@@ -10,8 +10,11 @@ def get_youtube_metadata(url:str, config:dict):
     id, type = get_youtube_id(url)
     if type == 'channel':
         data = call_youtube(id, type, config)
-        data = {"data": data}
-        return YoutubeChannelNormalizer(data)
+        # Store data in formatted dictionary
+        if data and type == 'channel':
+            data = {'channel': data}
+            # Normalize the data
+            return YoutubeChannelNormalizer(data)
 
 
 def get_youtube_id(url:str):
@@ -72,7 +75,14 @@ class YoutubeChannelNormalizer(BaseClass):
         self.viewCount = data.get('statistics', {}).get('viewCount')
 
     def parse_youtube_channel_json_response(self, data):
-        if data.get('data') and len(data['data'].get('items')) > 0:
-            return data['data']['items'][0]
+        if data.get('channel') and verify_items_list(data['channel']):
+            return data['channel']['items'][0]
         else:
             return {}
+
+
+def verify_items_list(data:dict):
+    if data.get('items') and isinstance(data['items'],list) and len(data['items']) > 0:
+        return True
+    else:
+        return False

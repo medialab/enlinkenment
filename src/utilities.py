@@ -92,3 +92,7 @@ def list_tables(all_tables:list, prefix:str):
         table[0] for table in all_tables 
         if table[0].startswith(prefix)
     ]
+
+
+def log_time_message(step:str, duration:str):
+    return f'{step} - {duration}'

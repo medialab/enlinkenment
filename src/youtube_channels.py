@@ -8,7 +8,7 @@ from youtube_tools import get_youtube_metadata
 from aggregate import sum_aggregated_tables
 
 
-def aggregate_youtube_links(connection:duckdb):
+def aggregate_youtube_links(connection:duckdb, color:str):
     all_tables = connection.execute('SHOW TABLES;').fetchall()
 
     aggregate_tables = sorted(list_tables(all_tables=all_tables, prefix='youtube_links'))
@@ -36,56 +36,71 @@ def aggregate_youtube_links(connection:duckdb):
         [f'{column_name} UBIGINT' for column_name in month_column_names]
     )
 
-    for tweet_table, youtube_link_table, month_str in month_tables:
+    # Set up the progress bar
+    ProgressCompleteColumn = Progress(
+            TextColumn("{task.description}"),
+            MofNCompleteColumn(),
+            BarColumn(bar_width=60),
+            TimeElapsedColumn(),
+            expand=True,
+            )
+    with ProgressCompleteColumn as progress:
+        task1 = progress.add_task(description=f'{color}Aggregating channels...', start=False)
 
-        query = f"""
-        DROP TABLE IF EXISTS {youtube_link_table};
-        CREATE TABLE {youtube_link_table}(
-            clean_url VARCHAR,
-            nb_distinct_links_from_domain UBIGINT,
-            nb_collected_retweets_with_domain UBIGINT,
-            sum_all_tweets_with_domain UBIGINT,
-            nb_accounts_that_shared_domain_link UBIGINT,
-            {month_column_names_and_data_types}
-            );
-        """
-        connection.execute(query)
+        for tweet_table, youtube_link_table, month_str in month_tables:
+
+            query = f"""
+            DROP TABLE IF EXISTS {youtube_link_table};
+            CREATE TABLE {youtube_link_table}(
+                clean_url VARCHAR,
+                nb_distinct_links_from_domain UBIGINT,
+                nb_collected_retweets_with_domain UBIGINT,
+                sum_all_tweets_with_domain UBIGINT,
+                nb_accounts_that_shared_domain_link UBIGINT,
+                {month_column_names_and_data_types}
+                );
+            """
+            connection.execute(query)
 
 
-        month_column_string = fill_out_month_columns(month_column_names, month_str)
-        query = f"""
-        INSERT INTO {youtube_link_table}
-        SELECT  clean_url,
-                COUNT(DISTINCT normalized_url),
-                COUNT(DISTINCT retweeted_id),
-                COUNT(DISTINCT tweet_id),
-                COUNT(DISTINCT user_id),
-                {month_column_string}
-        FROM (
-            SELECT  retweeted_id,
-                    tweet_id,
-                    user_id,
-                    local_time,
-                    needs_resolved,
-                    clean_url,
-                    normalized_url
-            FROM {tweet_table}
-            WHERE domain_name = 'youtube.com'
-        )
-        GROUP BY clean_url
-        """
-        connection.execute(query)
+            month_column_string = fill_out_month_columns(month_column_names, month_str)
+            progress.update(task_id=task1, total=len(month_tables))
+            progress.start_task(task_id=task1)
+            query = f"""
+            INSERT INTO {youtube_link_table}
+            SELECT  clean_url,
+                    COUNT(DISTINCT normalized_url),
+                    COUNT(DISTINCT retweeted_id),
+                    COUNT(DISTINCT tweet_id),
+                    COUNT(DISTINCT user_id),
+                    {month_column_string}
+            FROM (
+                SELECT  retweeted_id,
+                        tweet_id,
+                        user_id,
+                        local_time,
+                        needs_resolved,
+                        clean_url,
+                        normalized_url
+                FROM {tweet_table}
+                WHERE domain_name = 'youtube.com'
+            )
+            GROUP BY clean_url
+            """
+            connection.execute(query)
+            progress.update(task_id=task1, advance=1)
 
-def sum_aggregated_youtube_links(connection:duckdb):
+def sum_aggregated_youtube_links(connection:duckdb, color:str):
     sum_aggregated_tables(
         connection=connection,
         targeted_table_prefix='youtube_links_in',
         group_by=['clean_url'],
-        message='Summing aggregates of YouTube links'
+        message='Summing aggregates of YouTube links',
+        color=color
     )
 
 
-def request_youtube_channel_data(output_dir:Path, key:str, connection:duckdb):
+def request_youtube_channel_data(output_dir:Path, key:str, connection:duckdb, color:str):
     config = {'youtube':{'key':key}}
     outfile = output_dir.joinpath('youtube_channels.csv')
 
@@ -102,10 +117,21 @@ def request_youtube_channel_data(output_dir:Path, key:str, connection:duckdb):
     """
     connection.execute(query)
 
+    total = casanova.reader.count(aggregated_youtube_links_csv)
     with open(aggregated_youtube_links_csv) as f, open(outfile, 'w') as of:
         enricher = casanova.enricher(f, of, add=['id', 'country', 'description', 'keywords', 'title', 'publishedAt', 'subscriberCount', 'videoCount', 'viewCount'])
-        for row, url in enricher.cells('clean_url', with_rows=True):
-            normalized_data = get_youtube_metadata(url, config)
-            if normalized_data:
-                supplement = normalized_data.as_row()
-                enricher.writerow(row, supplement)
+        ProgressCompleteColumn = Progress(
+            TextColumn("{task.description}"),
+            MofNCompleteColumn(),
+            BarColumn(bar_width=60),
+            TimeElapsedColumn(),
+            expand=True,
+            )
+        with ProgressCompleteColumn as progress:
+            task1 = progress.add_task(description=f'{color}Requesting YouTube data channel...', total=total, start=True)
+            for row, url in enricher.cells('clean_url', with_rows=True):
+                normalized_data = get_youtube_metadata(url, config)
+                if normalized_data:
+                    supplement = normalized_data.as_row()
+                    enricher.writerow(row, supplement)
+                progress.update(task_id=task1, advance=1)

@@ -1,15 +1,16 @@
 import duckdb
 from rich.progress import (BarColumn, MofNCompleteColumn, Progress, TextColumn,
                            TimeElapsedColumn)
-from utilities import (create_month_column_names, extract_month,
-                       fill_out_month_columns, list_tables, pair_tables)
+
+from utilities import extract_month, list_tables, pair_tables
 
 
 def sum_aggregated_tables(
     connection:duckdb,
     targeted_table_prefix:str,
     group_by:list,
-    message:str
+    message:str,
+    color:str
 ):
     # Get a list of all tables in the database
     all_tables = connection.execute('SHOW TABLES;').fetchall()
@@ -28,7 +29,7 @@ def sum_aggregated_tables(
             expand=True,
             )
     with ProgressCompleteColumn as progress:
-        task1 = progress.add_task(description=f'[bold blue]{message}...', start=True, total=total_tours)
+        task1 = progress.add_task(description=f'{color}{message}...', start=True, total=total_tours)
 
         # While more than 1 domain aggregate table exists,
         # continue pairing up the tables and summing their values

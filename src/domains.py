@@ -5,7 +5,7 @@ from utilities import (create_month_column_names, extract_month,
                        fill_out_month_columns, list_tables)
 from aggregate import sum_aggregated_tables
 
-def aggregate_domains(connection:duckdb):
+def aggregate_domains(connection:duckdb, color:str):
 
     # Get a list of all tables in the database
     all_tables = connection.execute('SHOW TABLES;').fetchall()
@@ -44,8 +44,8 @@ def aggregate_domains(connection:duckdb):
             expand=True,
             )
     with ProgressCompleteColumn as progress:
-        task1 = progress.add_task(description='[bold blue]Creating domain tables...', start=False)
-        task2 = progress.add_task(description='[bold blue]Aggregating domains in each table...', start=False)
+        task1 = progress.add_task(description=f'{color}Creating domain tables...', start=False)
+        task2 = progress.add_task(description=f'{color}Aggregating domains in each table...', start=False)
 
         # For every month of tweet data, create a table for domain aggregates
         total = len(month_tables)
@@ -89,12 +89,13 @@ def aggregate_domains(connection:duckdb):
             progress.update(task_id=task2, advance=1)
 
 
-def sum_aggregated_domains(connection:duckdb):
+def sum_aggregated_domains(connection:duckdb, color:str):
     sum_aggregated_tables(
         connection=connection,
         targeted_table_prefix='domains_in',
         group_by=['domain_id', 'domain_name'],
-        message='Summing aggregates of domains'
+        message='Summing aggregates of domains',
+        color=color
     )
 
 

@@ -10,7 +10,8 @@ import ural
 import ural.youtube
 from minet import multithreaded_resolve
 from rich.progress import (BarColumn, MofNCompleteColumn, Progress, TextColumn,
-                           TimeElapsedColumn)
+                           TimeElapsedColumn, SpinnerColumn)
+
 from utilities import FileNaming, get_filepaths
 
 # Configurations for selecting columns from CSV
@@ -119,7 +120,7 @@ def add_column_for_yt_resolution(
     df.write_csv(outfile)
 
 
-def parse_input(input_data_path:str, input_file_pattern:str, output_dir:Path):
+def parse_input(input_data_path:str, input_file_pattern:str, output_dir:Path, color:str):
     files = get_filepaths(input_data_path, input_file_pattern)
     with Progress(
         TextColumn('{task.description}'),
@@ -128,10 +129,10 @@ def parse_input(input_data_path:str, input_file_pattern:str, output_dir:Path):
         TimeElapsedColumn()
     ) as progress:
         total = total=len(files)
-        task1 = progress.add_task(description='[bold blue]Select columns...', total=total, start=False)
-        task2 = progress.add_task(description='[bold blue]Deconcatenate links...', total=total, start=False)
-        task3 = progress.add_task(description='[bold blue]Parse links...', total=total, start=False)
-        task4 = progress.add_task(description='[bold blue]Give YouTube link to resolve...', total=total, start=False)
+        task1 = progress.add_task(description=f'{color}Select columns...', total=total, start=False)
+        task2 = progress.add_task(description=f'{color}Deconcatenate links...', total=total, start=False)
+        task3 = progress.add_task(description=f'{color}Parse links...', total=total, start=False)
+        task4 = progress.add_task(description=f'{color}Give YouTube link to resolve...', total=total, start=False)
         for infile in files:
             name_file = FileNaming(output_dir, infile)
 
@@ -165,7 +166,7 @@ def parse_input(input_data_path:str, input_file_pattern:str, output_dir:Path):
             progress.stop_task(task_id=task4)
 
 
-def resolve_youtube_urls(output_dir:Path, input_file_pattern:str):
+def resolve_youtube_urls(output_dir:Path, input_file_pattern:str, color:str):
     files = get_filepaths(output_dir, input_file_pattern)
     with Progress(
         TextColumn('{task.description}'),
@@ -173,8 +174,9 @@ def resolve_youtube_urls(output_dir:Path, input_file_pattern:str):
         MofNCompleteColumn(),
         TimeElapsedColumn()
     ) as progress:
-        task1 = progress.add_task('[bold green]Multithreaded YouTube URL resolution...', start=True, total=len(files))
-        task2 = progress.add_task('[bold green]    Progress through CSV...', start=False)
+        task1 = progress.add_task(f'{color}Multithreaded YouTube URL resolution...', start=False, total=len(files))
+        task2 = progress.add_task(f'{color}    Progress through CSV...', start=False)
+        progress.start_task(task_id=task1)
         for file in files:
             name_file = FileNaming(
                 output_dir=output_dir,
@@ -197,10 +199,10 @@ def resolve_youtube_urls(output_dir:Path, input_file_pattern:str):
             progress.update(task_id=task1, advance=1)
 
 
-def normalize_final_urls(input_dir:Path, output_dir:Path, input_file_pattern:str):
+def normalize_final_urls(input_dir:Path, output_dir:Path, input_file_pattern:str, color:str):
     files = get_filepaths(input_dir, input_file_pattern)
     with Progress(
-        TextColumn('[bold blue]URL normalization...'),
+        TextColumn(f'{color}URL normalization...'),
         BarColumn(),
         MofNCompleteColumn(),
         TimeElapsedColumn()
