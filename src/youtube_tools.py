@@ -10,11 +10,11 @@ def get_youtube_metadata(url:str, config:dict):
     id, type = get_youtube_id(url)
     if type == 'channel':
         data = call_youtube(id, type, config)
-        # Store data in formatted dictionary
-        if data and type == 'channel':
+    # Store data in formatted dictionary
+        if verify_data_format(data):
             data = {'channel': data}
-            # Normalize the data
             return YoutubeChannelNormalizer(data)
+        
 
 
 def get_youtube_id(url:str):
@@ -35,12 +35,13 @@ def get_youtube_id(url:str):
 def call_youtube(id:str, type:str, config:dict):
     """Call YouTube API and return JSON response."""
     url = None
-    key = config['youtube']['key']
-    client = YouTubeAPIClient(key)
-    if type == 'video':
-        url = forge_videos_url([id])
-    elif type == 'channel':
-        url = forge_channels_url([id])
+    keys = config['youtube']['keys']
+    client = YouTubeAPIClient(keys)
+    if id:
+        if type == 'video':
+            url = forge_videos_url([id])
+        elif type == 'channel':
+            url = forge_channels_url([id])
     if url:
         try:
             response = client.request_json(url)
@@ -75,14 +76,22 @@ class YoutubeChannelNormalizer(BaseClass):
         self.viewCount = data.get('statistics', {}).get('viewCount')
 
     def parse_youtube_channel_json_response(self, data):
-        if data.get('channel') and verify_items_list(data['channel']):
+        if verify_data_format(data, 'channel'):
             return data['channel']['items'][0]
         else:
             return {}
 
 
-def verify_items_list(data:dict):
-    if data.get('items') and isinstance(data['items'],list) and len(data['items']) > 0:
-        return True
-    else:
-        return False
+def verify_data_format(data:dict, key=None):
+    is_format_ok = False
+    if data:
+        if key and data.get(key):
+            data = data[key]
+        elif key and not data.get(key):
+            return is_format_ok
+        if data.get('items') \
+            and isinstance(data['items'],list) \
+                and len(data['items']) > 0:
+            is_format_ok = True
+    return is_format_ok
+

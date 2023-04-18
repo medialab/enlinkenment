@@ -11,7 +11,6 @@ from import_data import insert_processed_data
 from preprocessing import (POST_RESOLUTION_FILE_PATTERN,
                            PRE_RESOLUTION_FILE_PATTERN, normalize_final_urls,
                            parse_input, resolve_youtube_urls)
-from utilities import log_time_message
 from youtube_channels import (aggregate_youtube_links,
                               request_youtube_channel_data,
                               sum_aggregated_youtube_links)
@@ -20,9 +19,12 @@ from youtube_channels import (aggregate_youtube_links,
 @click.command()
 @click.argument('data')
 @click.option('-f', '--glob-file-pattern', type=click.types.STRING, default='**/*.gz', show_default=True)
-@click.option('-k', '--youtube-key', type=click.types.STRING)
+@click.option('-k', '--key', multiple=True)
 @click.option('--skip-preprocessing', is_flag=True, show_default=False, default=False)
-def main(data, glob_file_pattern, youtube_key, skip_preprocessing):
+def main(data, glob_file_pattern, key, skip_preprocessing):
+
+    key_list = list(key)
+    config = {'youtube':{'keys':key_list}}
 
     # --------------------------------- #
     #         PRE-PROCESS DATA
@@ -125,7 +127,7 @@ def main(data, glob_file_pattern, youtube_key, skip_preprocessing):
     with Timer(name='Time to request YouTube data', file=sys.stdout, precision='nanoseconds'):
         request_youtube_channel_data(
             output_dir=youtube_dir,
-            key=youtube_key,
+            config=config,
             connection=db_connection,
             color='[bold green]'
         )

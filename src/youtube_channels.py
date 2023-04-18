@@ -100,8 +100,7 @@ def sum_aggregated_youtube_links(connection:duckdb, color:str):
     )
 
 
-def request_youtube_channel_data(output_dir:Path, key:str, connection:duckdb, color:str):
-    config = {'youtube':{'key':key}}
+def request_youtube_channel_data(output_dir:Path, config:dict, connection:duckdb, color:str):
     outfile = output_dir.joinpath('youtube_channels.csv')
 
     all_tables = connection.execute('SHOW TABLES;').fetchall()
