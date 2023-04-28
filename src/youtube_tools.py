@@ -56,16 +56,17 @@ def call_youtube(id:str, type:str, config:dict):
 
 def verify_data_format(data:dict, key=None):
     is_format_ok = False
-    if data:
-        if key and data.get(key):
-            data = data[key]
-        elif key and not data.get(key):
-            return is_format_ok
-        if data.get('items') \
-            and isinstance(data['items'],list) \
-                and len(data['items']) > 0:
-            is_format_ok = True
-    return is_format_ok
+    if not data:
+        return False
+
+    if key and data.get(key):
+        data = data[key]
+    elif key and not data.get(key):
+        return False
+
+    return data.get('items') \
+        and isinstance(data['items'], list) \
+            and len(data['items']) > 0:
 
 
 class BaseClass:
@@ -127,5 +128,4 @@ class YoutubeChannelNormalizer(BaseClass):
     def parse_youtube_channel_json_response(self, data):
         if data.get('channel') and data['channel'].get('items') and len(data['channel'].get('items')) > 0:
             return data['channel']['items'][0]
-        else:
-            return {}
+        return {}
