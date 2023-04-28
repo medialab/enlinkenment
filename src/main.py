@@ -39,66 +39,66 @@ def main(data, glob_file_pattern, key, config_file, skip_preprocessing):
     output_directory_path = Path(output_dir)
 
     # Determine whether to proceed with preprocessing below
-    # if not skip_preprocessing \
-    #     or not output_directory_path.is_dir() \
-    #         or not True in [
-    #             file.match(PARSED_URL_FILE_PATTERN)
-    #             for file in output_directory_path.iterdir()
-    #         ]:
+    if not skip_preprocessing \
+        or not output_directory_path.is_dir() \
+            or not True in [
+                file.match(PARSED_URL_FILE_PATTERN)
+                for file in output_directory_path.iterdir()
+            ]:
 
-    #     shutil.rmtree(output_dir, ignore_errors=True)
-    #     output_directory_path.mkdir(exist_ok=True)
-    #     prep_directory_path = output_directory_path.joinpath('prep')
-    #     prep_directory_path.mkdir()
+        shutil.rmtree(output_dir, ignore_errors=True)
+        output_directory_path.mkdir(exist_ok=True)
+        prep_directory_path = output_directory_path.joinpath('prep')
+        prep_directory_path.mkdir()
 
-    #     with Timer(name='---->total time to parse input', file=sys.stdout, precision='nanoseconds'):
-    #         parse_input(
-    #             input_data_path=data,
-    #             input_file_pattern=glob_file_pattern,
-    #             output_dir=prep_directory_path,
-    #             color='[bold green]'
-    #         )
+        with Timer(name='---->total time to parse input', file=sys.stdout, precision='nanoseconds'):
+            parse_input(
+                input_data_path=data,
+                input_file_pattern=glob_file_pattern,
+                output_dir=prep_directory_path,
+                color='[bold green]'
+            )
 
-    # # --------------------------------- #
-    # #         IMPORT DATA
+    # --------------------------------- #
+    #         IMPORT DATA
 
     database_name = 'twitter_links.duckdb'
     database_path = output_directory_path.joinpath(f'{database_name}.duckdb')
 
     db_connection = duckdb.connect(str(database_path), read_only=False)
 
-    # with Timer(name='---->total time to insert preprocessed data', file=sys.stdout, precision='nanoseconds'):
-    #     insert_processed_data(
-    #         connection=db_connection,
-    #         input_dir=prep_directory_path,
-    #         input_file_pattern=PARSED_URL_FILE_PATTERN,
-    #         color='[bold blue]'
-    #     )
+    with Timer(name='---->total time to insert preprocessed data', file=sys.stdout, precision='nanoseconds'):
+        insert_processed_data(
+            connection=db_connection,
+            input_dir=prep_directory_path,
+            input_file_pattern=PARSED_URL_FILE_PATTERN,
+            color='[bold blue]'
+        )
 
-    # # --------------------------------- #
-    # #         AGGREGATE DOMAINS
+    # --------------------------------- #
+    #         AGGREGATE DOMAINS
 
-    # with Timer(name='---->total time to aggregate domains', file=sys.stdout, precision='nanoseconds'):
-    #     aggregate_domains(
-    #         connection=db_connection,
-    #         color='[bold green]'
-    #     )
+    with Timer(name='---->total time to aggregate domains', file=sys.stdout, precision='nanoseconds'):
+        aggregate_domains(
+            connection=db_connection,
+            color='[bold green]'
+        )
 
-    # with Timer(name='---->total time to sum aggregated domains', file=sys.stdout, precision='nanoseconds'):
-    #     sum_aggregated_domains(
-    #         connection=db_connection,
-    #         color='[bold blue]'
-    #     )
+    with Timer(name='---->total time to sum aggregated domains', file=sys.stdout, precision='nanoseconds'):
+        sum_aggregated_domains(
+            connection=db_connection,
+            color='[bold blue]'
+        )
 
-    # with Timer(name='---->total time to export domains', file=sys.stdout, precision='nanoseconds'):
-    #     outfile_path_obj = output_directory_path.joinpath('domains.csv')
-    #     export_domains(
-    #         connection=db_connection,
-    #         outfile=str(outfile_path_obj)
-    #     )
+    with Timer(name='---->total time to export domains', file=sys.stdout, precision='nanoseconds'):
+        outfile_path_obj = output_directory_path.joinpath('domains.csv')
+        export_domains(
+            connection=db_connection,
+            outfile=str(outfile_path_obj)
+        )
 
-    # # --------------------------------- #
-    # #     AGGREGATE YOUTUBE CHANNELS
+    # --------------------------------- #
+    #     AGGREGATE YOUTUBE CHANNELS
 
     if will_get_youtube_data:
 
@@ -126,11 +126,11 @@ def main(data, glob_file_pattern, key, config_file, skip_preprocessing):
                 color='[bold green]'
             )
 
-        with Timer(name='---->total time to aggregate YouTube channel data', file=sys.stdout, precision='nanoseconds'):
-            aggregate_youtube_channel_data(
-                output_dir=youtube_dir,
-                connection=db_connection
-            )
+        # with Timer(name='---->total time to aggregate YouTube channel data', file=sys.stdout, precision='nanoseconds'):
+        #     aggregate_youtube_channel_data(
+        #         output_dir=youtube_dir,
+        #         connection=db_connection
+        #     )
 
 if __name__ == "__main__":
     main()

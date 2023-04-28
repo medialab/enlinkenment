@@ -1,13 +1,16 @@
+from pathlib import Path
+
+import casanova
 import duckdb
 from rich.progress import (BarColumn, MofNCompleteColumn, Progress, TextColumn,
                            TimeElapsedColumn)
-import casanova
-from pathlib import Path
-from utilities import extract_month, create_month_column_names, fill_out_month_columns, list_tables
-from youtube_tools import get_youtube_metadata, YoutubeVideoNormalizer, YoutubeChannelNormalizer
+
 from aggregate import sum_aggregated_tables
 from preprocessing import configure_pyarrow, select_columns
-from utilities import FileNaming
+from utilities import (FileNaming, create_month_column_names, extract_month,
+                       fill_out_month_columns, list_tables)
+from youtube_tools import (YoutubeChannelNormalizer, YoutubeVideoNormalizer,
+                           get_youtube_metadata)
 
 FINAL_YOUTUBE_LINKS_TABLE = 'all_youtube_links'
 AGGREGATED_YOUTUBE_LINKS_CSV_NAME = 'aggregated_youtube_links.csv'
@@ -115,7 +118,7 @@ def sum_aggregated_youtube_links(connection:duckdb, color:str):
     connection.execute(query)
 
 
-def request_youtube_channel_data(output_dir:Path, config:dict, connection:duckdb, color:str):
+def write_aggregated_youtube_links(output_dir:Path, config:dict, connection:duckdb, color:str):
     outfile = output_dir.joinpath(YOUTUBE_DATA_CSV_NAME)
 
     aggregated_youtube_links_csv = output_dir.joinpath(AGGREGATED_YOUTUBE_LINKS_CSV_NAME)
@@ -124,36 +127,6 @@ def request_youtube_channel_data(output_dir:Path, config:dict, connection:duckdb
     COPY (SELECT * FROM {FINAL_YOUTUBE_LINKS_TABLE}) TO '{aggregated_youtube_links_csv}' (HEADER, DELIMITER ',');
     """
     connection.execute(query)
-
-    total = casanova.reader.count(aggregated_youtube_links_csv)
-    with open(aggregated_youtube_links_csv) as f, open(outfile, 'w') as of:
-        enricher = casanova.enricher(f, of, add=['channel_country', 'channel_description', 'channel_id', 'channel_keywords', 'channel_publishedAt', 'channel_subscriberCount', 'channel_title', 'channel_videoCount', 'channel_viewCount', 'video_commentCount', 'video_description', 'video_duration', 'video_favoriteCount', 'video_id', 'video_likeCount', 'video_publishedAt', 'video_tags', 'video_title', 'video_viewCount'])
-        ProgressCompleteColumn = Progress(
-            TextColumn("{task.description}"),
-            MofNCompleteColumn(),
-            BarColumn(bar_width=60),
-            TimeElapsedColumn(),
-            expand=True,
-            )
-        with ProgressCompleteColumn as progress:
-            task1 = progress.add_task(description=f'{color}Requesting YouTube data channel...', total=total, start=True)
-            for row, url in enricher.cells('normalized_url', with_rows=True):
-                normalized_data = get_youtube_metadata(url, config)
-                if normalized_data:
-                    supplement = format_youtube_data(normalized_data)
-                    enricher.writerow(row, supplement)
-                progress.update(task_id=task1, advance=1)
-
-
-def format_youtube_data(normalized_data):
-    additional_attributes = []
-    if isinstance(normalized_data, YoutubeChannelNormalizer):
-        additional_attributes = ['video_id', 'video_description', 'video_tags', 'video_publishedAt', 'video_duration', 'video_favoriteCount', 'video_title', 'video_viewCount', 'video_likeCount', 'video_commentCount']
-    data_as_dict = normalized_data.as_dict()
-    for attribute in additional_attributes:
-        data_as_dict.update({attribute:None})
-    sorted_data = sorted(data_as_dict.items())
-    return [value for _,value in sorted_data]
 
 
 def aggregate_youtube_channel_data(output_dir:Path, connection:duckdb):
