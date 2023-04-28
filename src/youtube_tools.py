@@ -100,18 +100,15 @@ class YoutubeVideoNormalizer(BaseClass):
         self.channel_country = channel_data.get('brandingSettings',{}).get('channel', {}).get('country')
 
     def parse_youtube_video_json_response(self, data):
+        video_data = {}
         if data.get('video') and data['video'].get('items') and len(data['video'].get('items')) > 0 \
-        and data.get('channel') and data['channel'].get('items') and len(data['channel'].get('items')) > 0:
             video_data = data['video']['items'][0]
+
+        channel_data = {}
+        if data.get('channel') and data['channel'].get('items') and len(data['channel'].get('items')) > 0:
             channel_data = data['channel']['items'][0]
-            return video_data, channel_data
-        else:
-            channel_data = {}
-            if data.get('video') and len(data['video'].get('items')) > 0:
-                video_data = data['video']['items'][0]
-            else:
-                video_data = {}
-            return video_data, channel_data
+
+        return video_data, channel_data
 
 
 class YoutubeChannelNormalizer(BaseClass):
