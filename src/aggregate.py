@@ -18,7 +18,10 @@ def sum_aggregated_tables(
     # Extract a list of only tables with months' tweet links
     aggregate_tables = sorted(list_tables(all_tables=all_tables, prefix=targeted_table_prefix))
 
-    total_tours = len(aggregate_tables)//2 + len(aggregate_tables)%2
+    if len(aggregate_tables)//2 == len(aggregate_tables)/2:
+        total_tours = len(aggregate_tables)//2
+    else:
+        total_tours = len(aggregate_tables)//2 + len(aggregate_tables)%2
 
     # Set up the progress bar
     ProgressCompleteColumn = Progress(

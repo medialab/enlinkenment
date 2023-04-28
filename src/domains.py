@@ -1,9 +1,11 @@
 import duckdb
 from rich.progress import (BarColumn, MofNCompleteColumn, Progress, TextColumn,
                            TimeElapsedColumn)
+
+from aggregate import sum_aggregated_tables
 from utilities import (create_month_column_names, extract_month,
                        fill_out_month_columns, list_tables)
-from aggregate import sum_aggregated_tables
+
 
 def aggregate_domains(connection:duckdb, color:str):
 

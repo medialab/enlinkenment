@@ -8,7 +8,7 @@ from utilities import get_filepaths, name_table
 from domains import list_tables
 
 
-def insert_processed_data(connection:duckdb, input_dir:Path, input_file_pattern:str):
+def insert_processed_data(connection:duckdb, input_dir:Path, input_file_pattern:str, color:str):
     """Function to insert parquet file into database's main table."""
     connection.execute('PRAGMA disable_progress_bar')
 
@@ -35,9 +35,9 @@ def insert_processed_data(connection:duckdb, input_dir:Path, input_file_pattern:
             expand=True,
             )
     with ProgressCompleteColumn as progress:
-        task1 = progress.add_task('[bold blue]Parsing date range...', start=False)
-        task2 = progress.add_task('[bold blue]Creating tables...', start=False)
-        task3 = progress.add_task('[bold blue]Importing tweet data...', start=False)
+        task1 = progress.add_task(f'{color}Parsing date range...', start=False)
+        task2 = progress.add_task(f'{color}Creating tables...', start=False)
+        task3 = progress.add_task(f'{color}Importing tweet data...', start=False)
 
         # Get a list of all the months in the dataset
         all_months = []
@@ -75,8 +75,6 @@ def insert_processed_data(connection:duckdb, input_dir:Path, input_file_pattern:
                 tweet_id VARCHAR,
                 user_id VARCHAR,
                 local_time TIMESTAMP,
-                needs_resolved BOOLEAN,
-                clean_url VARCHAR,
                 );
             """
             connection.execute(query)
@@ -97,8 +95,6 @@ def insert_processed_data(connection:duckdb, input_dir:Path, input_file_pattern:
                         tweet_id,
                         user_id,
                         local_time,
-                        needs_resolved,
-                        clean_url,
                 FROM (
                     SELECT  id AS tweet_id,
                             CAST(local_time AS TIMESTAMP) AS local_time,
@@ -106,8 +102,6 @@ def insert_processed_data(connection:duckdb, input_dir:Path, input_file_pattern:
                             retweeted_id,
                             link,
                             domain AS domain_name,
-                            CAST(needs_resolved AS BOOLEAN) as needs_resolved,
-                            clean_url,
                             normalized_url
                     FROM read_parquet('{filepath_str}')
                 )
