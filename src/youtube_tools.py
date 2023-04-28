@@ -1,3 +1,4 @@
+import sys
 import ural.youtube
 from minet.youtube import YouTubeAPIClient
 from minet.youtube.client import forge_channels_url, forge_videos_url
@@ -50,8 +51,8 @@ def call_youtube(id:str, type:str, config:dict):
         try:
             response = client.request_json(url)
             return response
-        except Exception:
-            pass
+        except Exception as e:
+            print("WARNING: got a response error from YouTube for %s: %s - %s" % (url, type(e), e), file=sys.stderr)
 
 
 def verify_data_format(data:dict, key=None):
