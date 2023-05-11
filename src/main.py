@@ -7,10 +7,12 @@ import click
 import duckdb
 from ebbe import Timer
 
-from aggregate import recursively_aggregate_tables
-from domains import aggregate_domains, export_domains
+from aggregate import aggregate_tables, recursively_aggregate_tables
+from domains import domain_aggregate_sql, export_domains
 from import_data import insert_processed_data
 from preprocessing import PARSED_URL_FILE_PATTERN, parse_input
+from utilities import SwitchColor
+from youtube_links import export_youtube_links, youtube_link_aggregate_sql
 
 
 @click.command()
@@ -67,6 +69,8 @@ def main(data, glob_file_pattern, key, config_file, skip_pre_processing):
     database_name = "twitter_links"
     database_path = output_directory_path.joinpath(f"{database_name}.duckdb")
 
+    color = SwitchColor()
+
     # ------------------------------------------------------------------------ #
     # Step 1. Isolate and parse URLs from raw twitter data
 
@@ -87,7 +91,7 @@ def main(data, glob_file_pattern, key, config_file, skip_pre_processing):
                 input_data_path=data_path,
                 input_file_pattern=glob_file_pattern,
                 output_dir=preprocessing_directory_path,
-                color="[bold green]",
+                color=color.set(),
             )
     if skip_pre_processing and not preprocessing_directory_path.exists():
         raise FileNotFoundError
@@ -106,21 +110,26 @@ def main(data, glob_file_pattern, key, config_file, skip_pre_processing):
             connection=db_connection,
             preprocessing_dir=preprocessing_directory_path,
             input_file_pattern=PARSED_URL_FILE_PATTERN,
-            color="[bold blue]",
+            color=color.set(),
         )
 
     # ------------------------------------------------------------------------ #
     # Step 3. Group the twitter data by the parsed domain name of each URL
 
     with Timer(
-        name="---->total time to aggregate domains",
+        name="---->total time to aggregate domains for each month",
         file=sys.stdout,
         precision="nanoseconds",
     ):
-        aggregate_domains(connection=db_connection, color="[bold green]")
+        aggregate_tables(
+            connection=db_connection,
+            color=color.set(),
+            target_table_prefix="domains_in",
+            sql=domain_aggregate_sql(),
+        )
 
     with Timer(
-        name="---->total time to sum aggregated domains",
+        name="---->total time to sum all aggregated domains",
         file=sys.stdout,
         precision="nanoseconds",
     ):
@@ -131,7 +140,7 @@ def main(data, glob_file_pattern, key, config_file, skip_pre_processing):
         )
 
     with Timer(
-        name="---->total time to export domains",
+        name="---->total time to export aggregated domains",
         file=sys.stdout,
         precision="nanoseconds",
     ):
@@ -139,12 +148,45 @@ def main(data, glob_file_pattern, key, config_file, skip_pre_processing):
         export_domains(connection=db_connection, outfile=str(outfile_path_obj))
 
     # ------------------------------------------------------------------------ #
-    # Step 4. Isolate the YouTube links in the dataset and collect metadata
+    # Step 4. Group together all the YouTube links
 
     if config:
         youtube_dir = output_directory_path.joinpath("youtube")
         shutil.rmtree(youtube_dir, ignore_errors=True)
         youtube_dir.mkdir()
+
+        with Timer(
+            name="---->total time to aggregate YouTube links for each month",
+            file=sys.stdout,
+            precision="nanoseconds",
+        ):
+            aggregate_tables(
+                connection=db_connection,
+                color=color.set(),
+                target_table_prefix="youtube_links",
+                sql=youtube_link_aggregate_sql(),
+            )
+
+        with Timer(
+            name="---->total time to sum all aggregated YouTube links",
+            file=sys.stdout,
+            precision="nanoseconds",
+        ):
+            recursively_aggregate_tables(
+                connection=db_connection,
+                targeted_table_prefix="youtube_links",
+                group_by=["normalized_url"],
+            )
+
+        with Timer(
+            name="---->total time to export aggregated YouTube links",
+            file=sys.stdout,
+            precision="nanoseconds",
+        ):
+            outfile_path_obj = youtube_dir.joinpath("youtube_links.csv")
+            export_youtube_links(
+                connection=db_connection, outfile=str(outfile_path_obj)
+            )
 
 
 if __name__ == "__main__":

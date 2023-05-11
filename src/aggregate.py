@@ -1,11 +1,42 @@
 import math
 
 import duckdb
-from rich.live import Live
-from rich.table import Table
 from rich.align import Align
+from rich.live import Live
+from rich.progress import (
+    BarColumn,
+    MofNCompleteColumn,
+    Progress,
+    TextColumn,
+    TimeElapsedColumn,
+)
+from rich.table import Table
 
-from utilities import extract_month, list_tables, pair_tables
+from utilities import (
+    MonthlyTweetData,
+    build_aggregate_command_for_month_columns,
+    create_month_column_names,
+    extract_month,
+    list_tables,
+    pair_tables,
+)
+
+
+class AggregateSQL:
+    def __init__(
+        self,
+        new_table_constant_columns: list[str],
+        select: str,
+        where: str,
+        group_by: str,
+    ) -> None:
+        self.columns = ", ".join(new_table_constant_columns)
+        if select.rstrip()[-1] != ",":
+            self.select = select + ","
+        else:
+            self.select = select
+        self.where = where
+        self.group_by = group_by
 
 
 def write_live_table_row(table: Table, tour: str, pairings: list):
@@ -119,3 +150,94 @@ def recursively_aggregate_tables(
             target_tables = sorted(
                 list_tables(all_tables=all_tables, prefix=targeted_table_prefix)
             )
+
+
+def aggregate_tables(
+    connection: duckdb.DuckDBPyConnection,
+    color: str,
+    target_table_prefix: str,
+    sql: AggregateSQL,
+):
+    """Function to group every monthly table's tweets by domain name and sum the other metrics."""
+
+    # Before continuing with this process, remove any existing monthly aggregate tables
+    all_tables = connection.execute("SHOW TABLES;").fetchall()
+    aggregate_tables = sorted(list_tables(all_tables=all_tables, prefix="domains"))
+    if len(aggregate_tables) > 0:
+        for table in aggregate_tables:
+            query = f"""
+            DROP TABLE {table};
+            """
+            connection.execute(query)
+
+    # Extract a list of the database's monthly tweet links tables, each of whose link data will be grouped by domain
+    monthly_tweet_data = [
+        MonthlyTweetData(table[0], target_table_prefix)
+        for table in all_tables
+        if table[0].startswith("tweets_from")
+    ]
+
+    # So that each monthly domain aggregate table has a column for every month present in the dataset,
+    # get all the monthly tweet links tables' names and extract the month part
+    months_in_all_tweet_data = [m.month_name for m in monthly_tweet_data]
+    month_column_names = create_month_column_names(months_in_all_tweet_data)
+    month_column_names_and_data_types = ", ".join(
+        [f"{column_name} UBIGINT" for column_name in month_column_names]
+    )
+
+    # ----------------------------------------------------------------------- #
+    # Set up the progress bar
+    ProgressCompleteColumn = Progress(
+        TextColumn("{task.description}"),
+        MofNCompleteColumn(),
+        BarColumn(bar_width=60),
+        TimeElapsedColumn(),
+        expand=True,
+    )
+    with ProgressCompleteColumn as progress:
+        task1 = progress.add_task(
+            description=f"{color}Creating monthly aggregate tables...", start=False
+        )
+        task2 = progress.add_task(
+            description=f"{color}Aggregating data in each table...", start=False
+        )
+        total = len(monthly_tweet_data)
+        # ------------------------------------------------------------------ #
+
+        # For every table of monthly twitter link data: (1) create a table for domain aggregates
+        # and (2) insert the month's tweet data into that table while grouping by the domain
+        for m in monthly_tweet_data:
+            # Prepare the progress bar for task 1: Creating the table of domain aggregates
+            progress.update(task_id=task1, total=total)
+            progress.start_task(task_id=task1)
+
+            # While adding however many month columns are necessary for the dataset, create the table
+            query = f"""
+            DROP TABLE IF EXISTS {m.aggregated_table_name};
+            CREATE TABLE {m.aggregated_table_name}(
+                {sql.columns},
+                {month_column_names_and_data_types}
+                );
+            """
+            connection.execute(query)
+            progress.update(task_id=task1, advance=1)
+
+            # Prepare the progress bar for task 2: Inserting data into the domain aggregates table
+            progress.update(task_id=task2, total=total)
+            progress.start_task(task_id=task2)
+
+            # While minding the order of the table's month columns, define the SQL command that
+            # will sum this month's data into the relevant month column
+            month_column_aggregate_string = build_aggregate_command_for_month_columns(
+                month_column_names, m.month_name
+            )
+            query = f"""
+            INSERT INTO {m.aggregated_table_name}
+            SELECT  {sql.select}
+                    {month_column_aggregate_string}
+            FROM {m.tweet_links_table_name}
+            WHERE domain_name IS NOT NULL
+            GROUP BY {sql.group_by};
+            """
+            connection.execute(query)
+            progress.update(task_id=task2, advance=1)

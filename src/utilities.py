@@ -3,6 +3,34 @@ from pathlib import Path
 from typing import Any
 
 
+class SwitchColor:
+    """Class to alternate the console message colors between green and blue."""
+
+    def __init__(self) -> None:
+        self.blue = "[bold blue]"
+        self.green = "[bold green]"
+        self.color = self.blue
+
+    def set(self) -> str:
+        # If the current color is blue, change to green
+        if self.color == self.blue:
+            self.color = self.green
+        # If the current color is not blue, change to blue
+        else:
+            self.color = self.blue
+        # Return the new color
+        return self.color
+
+
+class MonthlyTweetData:
+    """Class to parse and derive information from a monthly tweet table's name."""
+
+    def __init__(self, monthly_tweet_links_table_name: str, prefix: str) -> None:
+        self.tweet_links_table_name = monthly_tweet_links_table_name
+        self.month_name = extract_month(self.tweet_links_table_name)
+        self.aggregated_table_name = f"{prefix}_{self.month_name}"
+
+
 class FileNaming:
     """Class whose methods derive new file paths based on a given file's name."""
 
