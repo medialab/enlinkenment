@@ -1,20 +1,30 @@
 from pathlib import Path
 
 import duckdb
-from rich.progress import (BarColumn, MofNCompleteColumn, Progress, TextColumn,
-                           TimeElapsedColumn)
+from rich.progress import (
+    BarColumn,
+    MofNCompleteColumn,
+    Progress,
+    TextColumn,
+    TimeElapsedColumn,
+)
 
-from utilities import get_filepaths, name_table
+from utilities import get_filepaths, forge_name_with_date
 from domains import list_tables
 
 
-def insert_processed_data(connection:duckdb, input_dir:Path, input_file_pattern:str, color:str):
+def insert_processed_data(
+    connection: duckdb.DuckDBPyConnection,
+    preprocessing_dir: Path,
+    input_file_pattern: str,
+    color: str,
+):
     """Function to insert parquet file into database's main table."""
-    connection.execute('PRAGMA disable_progress_bar')
+    connection.execute("PRAGMA disable_progress_bar")
 
-    # Remove any existing domains table in the database
-    all_tables = connection.execute('SHOW TABLES;').fetchall()
-    aggregate_tables = list_tables(all_tables, 'domains')
+    # Before continuing with this process, remove any existing monthly tables in the database
+    all_tables = connection.execute("SHOW TABLES;").fetchall()
+    aggregate_tables = list_tables(all_tables, "tweets_from")
     if len(aggregate_tables) > 0:
         for table in aggregate_tables:
             query = f"""
@@ -22,49 +32,56 @@ def insert_processed_data(connection:duckdb, input_dir:Path, input_file_pattern:
             """
             connection.execute(query)
 
-    # Get a list of processed parquet files
+    # Get a list of all pre-processed parquet files in the pre-processing directory
     parquet_files = get_filepaths(
-        data_path=input_dir,
-        file_pattern=input_file_pattern
+        data_path=preprocessing_dir, file_pattern=input_file_pattern
     )
-    ProgressCompleteColumn = Progress(
-            TextColumn("{task.description}"),
-            MofNCompleteColumn(),
-            BarColumn(bar_width=60),
-            TimeElapsedColumn(),
-            expand=True,
-            )
-    with ProgressCompleteColumn as progress:
-        task1 = progress.add_task(f'{color}Parsing date range...', start=False)
-        task2 = progress.add_task(f'{color}Creating tables...', start=False)
-        task3 = progress.add_task(f'{color}Importing tweet data...', start=False)
 
-        # Get a list of all the months in the dataset
-        all_months = []
-        files_with_months = {}
+    # ----------------------------------------------------------------------- #
+    # Set up the progress bar
+    ProgressCompleteColumn = Progress(
+        TextColumn("{task.description}"),
+        MofNCompleteColumn(),
+        BarColumn(bar_width=60),
+        TimeElapsedColumn(),
+        expand=True,
+    )
+    with ProgressCompleteColumn as progress:
+        task1 = progress.add_task(f"{color}Parsing date range...", start=False)
+        task2 = progress.add_task(f"{color}Creating tables...", start=False)
+        task3 = progress.add_task(f"{color}Importing tweet data...", start=False)
+        # ------------------------------------------------------------------ #
+
+        # Start progress bar on task 1: Parsing the dataset's date range
         progress.update(task_id=task1, total=len(parquet_files))
         progress.start_task(task_id=task1)
-        for parquet_filepath_obj in parquet_files:
-            filepath_str = str(parquet_filepath_obj)
+
+        # Parse which months are represented in which data files
+        months_in_all_files = []
+        index_of_files_and_their_months = {}
+        for f in parquet_files:
+            filepath = str(f)
             query = f"""
             SELECT DISTINCT date_trunc('month', local_time)
             FROM (
                 SELECT CAST(local_time AS TIMESTAMP) AS local_time
-                FROM read_parquet('{filepath_str}')
+                FROM read_parquet('{filepath}')
             )
             GROUP BY date_trunc('month', local_time);
             """
-            months_in_file = [t[0] for t in duckdb.sql(query).fetchall()]
-            all_months.extend(months_in_file)
-            files_with_months[filepath_str] = months_in_file
+            months_in_the_file = [t[0] for t in duckdb.sql(query).fetchall()]
+            months_in_all_files.extend(months_in_the_file)
+            index_of_files_and_their_months[filepath] = months_in_the_file
             progress.update(task_id=task1, advance=1)
-        all_months = set(all_months)
+        all_months = set(months_in_all_files)
 
-        # Create tables for each month in the dataset
+        # Start progress bar on task 2: Creating tables in the database
         progress.update(task_id=task2, total=(len(all_months)))
         progress.start_task(task_id=task2)
+
+        # Create tables for each month in the dataset
         for month in all_months:
-            table_name = name_table(datetime_obj=month)
+            table_name = forge_name_with_date(prefix="tweets_from", datetime_obj=month)
             query = f"""
             DROP TABLE IF EXISTS {table_name};
             CREATE TABLE {table_name}(
@@ -80,12 +97,18 @@ def insert_processed_data(connection:duckdb, input_dir:Path, input_file_pattern:
             connection.execute(query)
             progress.update(task_id=task2, advance=1)
 
-        # Import tweet data to the right month's table
-        progress.update(task_id=task3, total=len(files_with_months.keys()))
+        # Start progress bar on task 3: Importing files' data into the database
+        progress.update(
+            task_id=task3, total=len(index_of_files_and_their_months.keys())
+        )
         progress.start_task(task_id=task3)
-        for filepath_str, month_list in files_with_months.items():
-            for month in month_list:
-                table_name = name_table(datetime_obj=month)
+
+        # Import tweet data into the table representing the month of the tweet's publication
+        for file, months_in_the_file in index_of_files_and_their_months.items():
+            for month in months_in_the_file:
+                table_name = forge_name_with_date(
+                    prefix="tweets_from", datetime_obj=month
+                )
                 query = f"""
                 INSERT INTO {table_name}
                 SELECT  md5(domain_name),
@@ -103,7 +126,7 @@ def insert_processed_data(connection:duckdb, input_dir:Path, input_file_pattern:
                             link,
                             domain AS domain_name,
                             normalized_url
-                    FROM read_parquet('{filepath_str}')
+                    FROM read_parquet('{file}')
                 )
                 WHERE date_trunc('month', local_time) = '{month}';
                 """

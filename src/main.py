@@ -1,136 +1,151 @@
+import json
 import shutil
 import sys
 from pathlib import Path
-import json
 
 import click
 import duckdb
 from ebbe import Timer
 
-from domains import aggregate_domains, export_domains, sum_aggregated_domains
+from aggregate import recursively_aggregate_tables
+from domains import aggregate_domains, export_domains
 from import_data import insert_processed_data
 from preprocessing import PARSED_URL_FILE_PATTERN, parse_input
-from youtube_channels import (aggregate_youtube_links,
-                              request_youtube_channel_data,
-                              sum_aggregated_youtube_links, aggregate_youtube_channel_data)
 
 
 @click.command()
-@click.argument('data')
-@click.option('-f', '--glob-file-pattern', type=click.types.STRING, default='**/*.gz', show_default=True)
-@click.option('-k', '--key', multiple=True, required=False)
-@click.option('-c', '--config-file', required=False)
-@click.option('--skip-preprocessing', is_flag=True, show_default=False, default=False)
-def main(data, glob_file_pattern, key, config_file, skip_preprocessing):
+@click.option(
+    "-d",
+    "--data",
+    type=click.types.STRING,
+    help="The path to a CSV file or the path to a directory containing CSV files.",
+)
+@click.option(
+    "-f",
+    "--glob-file-pattern",
+    type=click.types.STRING,
+    default="**/*.gz",
+    show_default=True,
+    help='A pattern (i.e. "*.csv") that captures the files targeted for processing in the given directory.',
+)
+@click.option(
+    "-k",
+    "--key",
+    multiple=True,
+    required=False,
+    help="A YouTube API key. This option may be given multiple times if multiple keys are available (i.e. -k KEY1 -k KEY2)",
+)
+@click.option(
+    "-c",
+    "--config-file",
+    required=False,
+    help=f"A JSON or YAML file that has an array of YouTube API keys (see example file).",
+)
+@click.option(
+    "--skip-pre-processing",
+    is_flag=True,
+    show_default=False,
+    default=False,
+    help="This flag skips the steps of parsing the raw twitter data and moves directly to importing pre-processed parquet files into the database for aggregation and further processing.",
+)
+def main(data, glob_file_pattern, key, config_file, skip_pre_processing):
+    data_path = Path(data)
 
-    will_get_youtube_data = False
+    # If given, parse the array of youtube API keys
+    config = None
     if config_file:
-        with open(config_file, 'r') as f:
+        with open(config_file, "r") as f:
             config = json.load(fp=f)
-            will_get_youtube_data = True
     elif key:
         key_list = list(key)
-        config = {'youtube':{'keys':key_list}}
-        will_get_youtube_data = True
+        config = {"youtube": {"key_list": key_list}}
 
-    # --------------------------------- #
-    #         PRE-PROCESS DATA
-    output_dir = 'output'
-    output_directory_path = Path(output_dir)
+    # Set up file paths for the output
+    output_dir_name = "output"
+    output_directory_path = Path(output_dir_name)
+    preprocessing_directory_path = output_directory_path.joinpath("pre-processing")
+    database_name = "twitter_links"
+    database_path = output_directory_path.joinpath(f"{database_name}.duckdb")
 
-    # Determine whether to proceed with preprocessing below
-    if not skip_preprocessing \
-        or not output_directory_path.is_dir() \
-            or not True in [
-                file.match(PARSED_URL_FILE_PATTERN)
-                for file in output_directory_path.iterdir()
-            ]:
+    # ------------------------------------------------------------------------ #
+    # Step 1. Isolate and parse URLs from raw twitter data
 
-        shutil.rmtree(output_dir, ignore_errors=True)
+    # If the directory "output/pre-processing/" doesn't already have each input
+    # file's URLs de-concatenated and parsed with Ural, clear out the "output/"
+    # directory and run parse_input() on the data file(s)
+    if not skip_pre_processing:
+        shutil.rmtree(output_dir_name, ignore_errors=True)
         output_directory_path.mkdir(exist_ok=True)
-        prep_directory_path = output_directory_path.joinpath('prep')
-        prep_directory_path.mkdir()
+        preprocessing_directory_path.mkdir()
 
-        with Timer(name='---->total time to parse input', file=sys.stdout, precision='nanoseconds'):
+        with Timer(
+            name="---->total time to parse input",
+            file=sys.stdout,
+            precision="nanoseconds",
+        ):
             parse_input(
-                input_data_path=data,
+                input_data_path=data_path,
                 input_file_pattern=glob_file_pattern,
-                output_dir=prep_directory_path,
-                color='[bold green]'
+                output_dir=preprocessing_directory_path,
+                color="[bold green]",
             )
+    if skip_pre_processing and not preprocessing_directory_path.exists():
+        raise FileNotFoundError
 
-    # --------------------------------- #
-    #         IMPORT DATA
-
-    database_name = 'twitter_links.duckdb'
-    database_path = output_directory_path.joinpath(f'{database_name}.duckdb')
+    # ------------------------------------------------------------------------ #
+    # Step 2. Import the parsed URL twitter data into the database
 
     db_connection = duckdb.connect(str(database_path), read_only=False)
 
-    with Timer(name='---->total time to insert preprocessed data', file=sys.stdout, precision='nanoseconds'):
+    with Timer(
+        name="---->total time to insert preprocessed data",
+        file=sys.stdout,
+        precision="nanoseconds",
+    ):
         insert_processed_data(
             connection=db_connection,
-            input_dir=prep_directory_path,
+            preprocessing_dir=preprocessing_directory_path,
             input_file_pattern=PARSED_URL_FILE_PATTERN,
-            color='[bold blue]'
+            color="[bold blue]",
         )
 
-    # --------------------------------- #
-    #         AGGREGATE DOMAINS
+    # ------------------------------------------------------------------------ #
+    # Step 3. Group the twitter data by the parsed domain name of each URL
 
-    with Timer(name='---->total time to aggregate domains', file=sys.stdout, precision='nanoseconds'):
-        aggregate_domains(
+    with Timer(
+        name="---->total time to aggregate domains",
+        file=sys.stdout,
+        precision="nanoseconds",
+    ):
+        aggregate_domains(connection=db_connection, color="[bold green]")
+
+    with Timer(
+        name="---->total time to sum aggregated domains",
+        file=sys.stdout,
+        precision="nanoseconds",
+    ):
+        recursively_aggregate_tables(
             connection=db_connection,
-            color='[bold green]'
+            targeted_table_prefix="domains_in",
+            group_by=["domain_id", "domain_name"],
         )
 
-    with Timer(name='---->total time to sum aggregated domains', file=sys.stdout, precision='nanoseconds'):
-        sum_aggregated_domains(
-            connection=db_connection,
-            color='[bold blue]'
-        )
+    with Timer(
+        name="---->total time to export domains",
+        file=sys.stdout,
+        precision="nanoseconds",
+    ):
+        outfile_path_obj = output_directory_path.joinpath("domains.csv")
+        export_domains(connection=db_connection, outfile=str(outfile_path_obj))
 
-    with Timer(name='---->total time to export domains', file=sys.stdout, precision='nanoseconds'):
-        outfile_path_obj = output_directory_path.joinpath('domains.csv')
-        export_domains(
-            connection=db_connection,
-            outfile=str(outfile_path_obj)
-        )
+    # ------------------------------------------------------------------------ #
+    # Step 4. Isolate the YouTube links in the dataset and collect metadata
 
-    # --------------------------------- #
-    #     AGGREGATE YOUTUBE CHANNELS
-
-    if will_get_youtube_data:
-
-        youtube_dir = output_directory_path.joinpath('youtube')
+    if config:
+        youtube_dir = output_directory_path.joinpath("youtube")
         shutil.rmtree(youtube_dir, ignore_errors=True)
         youtube_dir.mkdir()
 
-        with Timer(name='---->total time to aggregate YouTube URLs', file=sys.stdout, precision='nanoseconds'):
-            aggregate_youtube_links(
-                connection=db_connection,
-                color='[bold green]'
-            )
-
-        with Timer(name='---->total time to sum aggregated YouTube URLs', file=sys.stdout, precision='nanoseconds'):
-            sum_aggregated_youtube_links(
-                connection=db_connection,
-                color='[bold blue]'
-            )
-
-        with Timer(name='---->total time to request YouTube data', file=sys.stdout, precision='nanoseconds'):
-            request_youtube_channel_data(
-                output_dir=youtube_dir,
-                config=config,
-                connection=db_connection,
-                color='[bold green]'
-            )
-
-        # with Timer(name='---->total time to aggregate YouTube channel data', file=sys.stdout, precision='nanoseconds'):
-        #     aggregate_youtube_channel_data(
-        #         output_dir=youtube_dir,
-        #         connection=db_connection
-        #     )
 
 if __name__ == "__main__":
     main()
