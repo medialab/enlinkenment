@@ -157,7 +157,10 @@ def recursively_aggregate_tables(
     table = Table()
     table_centered = Align.center(table)
     table.add_column("Tour", no_wrap=False)
-    [table.add_column("Tables", no_wrap=False) for _ in range(total_tours)]
+    [
+        table.add_column("Table pairs\n(even = red & blue, odd = green)", no_wrap=False)
+        for _ in range(total_tours)
+    ]
     with Live(table_centered, refresh_per_second=4):
         # ----------------------------------------------------------------------- #
 
