@@ -47,9 +47,11 @@ def aggregate_tables(
 ):
     """Function to aggregate every every target table's tweets according to the "group_by" column given in the sql parameter."""
 
-    # Before continuing with this process, remove any existing monthly aggregate tables
+    # Before continuing with this process, remove any existing monthly aggregate tables with the target prefix
     all_tables = connection.execute("SHOW TABLES;").fetchall()
-    aggregate_tables = sorted(list_tables(all_tables=all_tables, prefix="domains"))
+    aggregate_tables = sorted(
+        list_tables(all_tables=all_tables, prefix=target_table_prefix)
+    )
     if len(aggregate_tables) > 0:
         for table in aggregate_tables:
             query = f"""
@@ -57,14 +59,15 @@ def aggregate_tables(
             """
             connection.execute(query)
 
-    # Extract a list of the database's monthly tweet links tables, each of whose link data will be grouped by domain
+    # Extract a list of the database's monthly tweet links tables, each of whose link data will be
+    # grouped by the "sql" parameter's "group_by" attribute
     monthly_tweet_data = [
         MonthlyTweetData(table[0], target_table_prefix)
         for table in all_tables
         if table[0].startswith("tweets_from")
     ]
 
-    # So that each monthly domain aggregate table has a column for every month present in the dataset,
+    # So that each monthly aggregate table has a column for every month present in the dataset,
     # get all the monthly tweet links tables' names and extract the month part
     months_in_all_tweet_data = [m.month_name for m in monthly_tweet_data]
     month_column_names = create_month_column_names(months_in_all_tweet_data)
@@ -149,7 +152,7 @@ def recursively_aggregate_tables(
     # ----------------------------------------------------------------------- #
     # Set up the progress table
     print(
-        f"\nRecursively concatenating pairs of tables and re-aggregating their contents until no more pairs can be made and all the targeted tables have been combined into one."
+        f"\nRecursively concatenating pairs of tables and re-grouping by {group_by} until no more pairs can be made and all the targeted tables have been combined into one."
     )
     table = Table()
     table_centered = Align.center(table)

@@ -8,15 +8,14 @@ import pyarrow.parquet
 import ural
 import ural.youtube
 from rich.progress import (
-    SpinnerColumn,
     MofNCompleteColumn,
     Progress,
+    SpinnerColumn,
     TextColumn,
     TimeElapsedColumn,
 )
 
 from utilities import FileNaming, get_filepaths
-
 
 # Columns to be selected from raw Twitter file
 SELECT_COLUMNS = ["id", "local_time", "user_id", "retweeted_id", "links"]
