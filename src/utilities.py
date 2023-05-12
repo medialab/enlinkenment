@@ -2,6 +2,9 @@ import datetime
 from pathlib import Path
 from typing import Any
 
+from rich import print as rich_print
+from rich.panel import Panel
+
 
 class SwitchColor:
     """Class to alternate the console message colors between green and blue."""
@@ -132,3 +135,7 @@ def list_tables(all_tables: list, prefix: str):
 def log_time_message(step: str, duration: str):
     """Function to document a process's duration."""
     return f"{step} - {duration}"
+
+
+def style_panel(msg, color, title):
+    rich_print(Panel(msg, title=f"{color}{title}", title_align="center", width=100))

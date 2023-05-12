@@ -83,7 +83,7 @@ def main(data, glob_file_pattern, key, config_file, skip_pre_processing):
         preprocessing_directory_path.mkdir()
 
         with Timer(
-            name="---->total time to parse input",
+            name="---->total time to pre-process data",
             file=sys.stdout,
             precision="nanoseconds",
         ):
@@ -93,6 +93,7 @@ def main(data, glob_file_pattern, key, config_file, skip_pre_processing):
                 output_dir=preprocessing_directory_path,
                 color=color.set(),
             )
+        print("")
     if skip_pre_processing and not preprocessing_directory_path.exists():
         raise FileNotFoundError
 
@@ -102,7 +103,7 @@ def main(data, glob_file_pattern, key, config_file, skip_pre_processing):
     db_connection = duckdb.connect(str(database_path), read_only=False)
 
     with Timer(
-        name="---->total time to insert preprocessed data",
+        name="---->total time to import pre-processed data",
         file=sys.stdout,
         precision="nanoseconds",
     ):
@@ -112,6 +113,7 @@ def main(data, glob_file_pattern, key, config_file, skip_pre_processing):
             input_file_pattern=PARSED_URL_FILE_PATTERN,
             color=color.set(),
         )
+        print("")
 
     # ------------------------------------------------------------------------ #
     # Step 3. Group the twitter data by the parsed domain name of each URL
@@ -127,6 +129,7 @@ def main(data, glob_file_pattern, key, config_file, skip_pre_processing):
             target_table_prefix="domains_in",
             sql=domain_aggregate_sql(),
         )
+    print("")
 
     with Timer(
         name="---->total time to sum all aggregated domains",
@@ -137,7 +140,9 @@ def main(data, glob_file_pattern, key, config_file, skip_pre_processing):
             connection=db_connection,
             targeted_table_prefix="domains_in",
             group_by=["domain_id", "domain_name"],
+            color=color.set(),
         )
+    print("")
 
     with Timer(
         name="---->total time to export aggregated domains",
@@ -166,6 +171,7 @@ def main(data, glob_file_pattern, key, config_file, skip_pre_processing):
                 target_table_prefix="youtube_links",
                 sql=youtube_link_aggregate_sql(),
             )
+        print("")
 
         with Timer(
             name="---->total time to sum all aggregated YouTube links",
@@ -176,7 +182,9 @@ def main(data, glob_file_pattern, key, config_file, skip_pre_processing):
                 connection=db_connection,
                 targeted_table_prefix="youtube_links",
                 group_by=["normalized_url"],
+                color=color.set(),
             )
+        print("")
 
         with Timer(
             name="---->total time to export aggregated YouTube links",
@@ -187,6 +195,7 @@ def main(data, glob_file_pattern, key, config_file, skip_pre_processing):
             export_youtube_links(
                 connection=db_connection, outfile=str(outfile_path_obj)
             )
+        print("")
 
 
 if __name__ == "__main__":

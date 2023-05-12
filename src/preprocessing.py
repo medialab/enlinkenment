@@ -15,7 +15,7 @@ from rich.progress import (
     TimeElapsedColumn,
 )
 
-from utilities import FileNaming, get_filepaths
+from utilities import FileNaming, get_filepaths, style_panel
 
 # Columns to be selected from raw Twitter file
 SELECT_COLUMNS = ["id", "local_time", "user_id", "retweeted_id", "links"]
@@ -36,12 +36,23 @@ def parse_input(
 ):
     """
     Iterating over each file captured by the input file pattern, this function manages the 3 steps of pre-processing:
-        (1) Stream the CSV file and select the relevant columns, writing to a parquet file.
 
-        (2) De-concatenate the URLs in the parquet file's column "links", returning a data frame.
+        (1) Stream the CSV file and select the relevant columns.
 
-        (3) Parse the separated links with Ural, writing to a compressed parquet file with additional columns "domain" and "normalized_url".
+        (2) De-concatenate and unnest the URLs in the "links" column.
+
+        (3) Parse the isolated URLs with Ural, generating new columns for the domain name and the normalized version of each URL.
     """
+
+    msg = f"""
+Iterating over each targeted data file:
+  (1) Stream the CSV file and select the relevant columns.
+  (2) De-concatenate and unnest the URLs in the "links" column.
+  (3) Parse the isolated URLs with Ural, generating new columns for the domain name and the normalized version of each URL.
+
+The resulting parsed data are written to compressed parquet files in the directory "{str(output_dir)}" with the prefix "{PARSED_URL_PREFIX}".
+    """
+    style_panel(msg=msg, color=color, title="Pre-process data")
 
     # Using the file path pattern, get an array of files to process
     files = get_filepaths(input_data_path, input_file_pattern)
@@ -68,7 +79,7 @@ def parse_input(
             )
             progress.update(task_id=step1, completed=n)
             step2 = progress.add_task(
-                description=f"[yellow]    Step 2. deconcatenate links...",
+                description=f"[yellow]    Step 2. de-concatenate links...",
                 total=total,
                 start=False,
             )

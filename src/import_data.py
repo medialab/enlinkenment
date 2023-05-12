@@ -9,8 +9,8 @@ from rich.progress import (
     TimeElapsedColumn,
 )
 
-from utilities import get_filepaths, forge_name_with_date
 from domains import list_tables
+from utilities import forge_name_with_date, get_filepaths, style_panel
 
 
 def insert_processed_data(
@@ -20,6 +20,12 @@ def insert_processed_data(
     color: str,
 ):
     """Function to insert parquet file into database's main table."""
+
+    msg = f"""
+For each pre-processed parquet file, parse the tweets' publication dates and insert each tweet's data into the table corresponding to the month of the tweet's publication.
+    """
+    style_panel(msg=msg, color=color, title="Import data")
+
     connection.execute("PRAGMA disable_progress_bar")
 
     # Before continuing with this process, remove any existing monthly tables in the database
@@ -47,9 +53,11 @@ def insert_processed_data(
         expand=True,
     )
     with ProgressCompleteColumn as progress:
-        task1 = progress.add_task(f"{color}Parsing date range...", start=False)
-        task2 = progress.add_task(f"{color}Creating tables...", start=False)
-        task3 = progress.add_task(f"{color}Importing tweet data...", start=False)
+        task1 = progress.add_task(f"{color}Parsing date range...", start=False, total=0)
+        task2 = progress.add_task(f"{color}Creating tables...", start=False, total=0)
+        task3 = progress.add_task(
+            f"{color}Importing tweet data...", start=False, total=0
+        )
         # ------------------------------------------------------------------ #
 
         # Start progress bar on task 1: Parsing the dataset's date range

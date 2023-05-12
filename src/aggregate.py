@@ -19,6 +19,7 @@ from utilities import (
     extract_month,
     list_tables,
     pair_tables,
+    style_panel,
 )
 
 
@@ -45,7 +46,11 @@ def aggregate_tables(
     target_table_prefix: str,
     sql: AggregateSQL,
 ):
-    """Function to aggregate every every target table's tweets according to the "group_by" column given in the sql parameter."""
+    """Function to aggregate every target table's tweets according to the "group_by" column given in the sql parameter."""
+    msg = f"""
+Group all tables of monthly tweet data on their column "{sql.group_by}" and aggregate the columns according to the following SQL:
+{sql.select}"""
+    style_panel(msg=msg, color=color, title="Aggregate tables")
 
     # Before continuing with this process, remove any existing monthly aggregate tables with the target prefix
     all_tables = connection.execute("SHOW TABLES;").fetchall()
@@ -137,6 +142,7 @@ def recursively_aggregate_tables(
     connection: duckdb.DuckDBPyConnection,
     targeted_table_prefix: str,
     group_by: list,
+    color: str,
 ):
     """Function to recursively concatenate pairs of tables and re-aggregate their contents until no more pairs can be made and all the targeted tables have been combined into one."""
 
@@ -148,19 +154,18 @@ def recursively_aggregate_tables(
 
     # Calculate the number of times it will take to recursively pair off the tables
     total_tours = round(math.log(len(target_tables), 2))
+    max_groups = round((len(target_tables) // 2) + (len(target_tables) % 2))
 
     # ----------------------------------------------------------------------- #
     # Set up the progress table
-    print(
-        f"\nRecursively concatenating pairs of tables and re-grouping by {group_by} until no more pairs can be made and all the targeted tables have been combined into one."
-    )
-    table = Table()
-    table_centered = Align.center(table)
+    msg = f"""
+Recursively concatenate pairs of tables and re-group by {group_by} until no more pairs can be made and all the targeted tables have been combined into one. Pairs are shown in red and blue. When there is an odd number of existing tables, one table is not paired with another and is shown in green. This recursive process is done to alleviate demands on the machine's memory.
+    """
+    style_panel(msg=msg, color=color, title="Combine tables")
+    table = Table(show_lines=True)
+    table_centered = Align.left(table)
     table.add_column("Tour", no_wrap=False)
-    [
-        table.add_column("Table pairs\n(even = red & blue, odd = green)", no_wrap=False)
-        for _ in range(total_tours)
-    ]
+    [table.add_column("Table pairs", no_wrap=False) for _ in range(max_groups)]
     with Live(table_centered, refresh_per_second=4):
         # ----------------------------------------------------------------------- #
 
@@ -170,7 +175,12 @@ def recursively_aggregate_tables(
             tour += 1
             # At the start of the loop, redo the pairing of remaining target tables
             table_pairings = pair_tables(target_tables)
-            write_live_table_row(table=table, tour=str(tour), pairings=table_pairings)
+            write_live_table_row(
+                table=table,
+                total_tours=str(total_tours),
+                tour=str(tour),
+                pairings=table_pairings,
+            )
 
             for pair in table_pairings:
                 # If the item in the list of table pairings is indeed 2 tables, and not an odd remaining table,
@@ -239,8 +249,9 @@ def recursively_aggregate_tables(
             )
 
 
-def write_live_table_row(table: Table, tour: str, pairings: list):
+def write_live_table_row(table: Table, total_tours: str, tour: str, pairings: list):
     cells = []
+    tour = f"{tour} / {total_tours}"
     for pair in pairings:
         if len(pair) == 2:
             cells.append(f"[red]{pair[0]} [white]& [blue]{pair[1]}")
