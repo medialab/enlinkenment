@@ -60,6 +60,7 @@ In the tables for monthly aggregates of links' domain names, group each monthly 
 ![aggregate each month's domain names](docs/aggregate_domains.png)
 
 ### Step 4. Combine aggregated domain names
+To avoid RAM issues, break up the process of aggregating all the data into steps. Recursively pair up tables of aggregated domain names, combine the pair in one table, and while selecting from that combined table, perform a new aggregation while grouping by the columns `domain_name` and `domain_id`. Continue this process of pairing, combining, and aggregating until all tables have been combined and there is only one table of aggregated domain names.
 
 ![combine aggregated domain names](docs/combine_domains.png)
 
@@ -69,33 +70,10 @@ In the tables for monthly aggregates of links from YouTube, group each monthly t
 ![aggregate each month's youtube links](docs/youtube_aggregate.png)
 
 ### Step 6. Combine aggregated YouTube links
+To avoid RAM issues, break up the process of aggregating all the data into steps. Recursively pair up tables of aggregated YouTube links, combine the pair in one table, and while selecting from that combined table, perform a new aggregation while grouping by the column `normalized_url`. Continue this process of pairing, combining, and aggregating until all tables have been combined and there is only one table of aggregated YouTube links.
 
 ![combine aggregated youtube links](docs/combine_youtube.png)
 
-Error: Still ran out of memory during recursive aggregation of YouTube links. The script crashes at the last group by, on a combined table that has 75,196,705 rows.
-
-```
-Traceback (most recent call last):
-  File "/Users/kelly.christensen/Dev/enlinkenment/src/main.py", line 202, in <module>
-    main()
-  File "/Users/kelly.christensen/.pyenv/versions/enlinkenment/lib/python3.11/site-packages/click/core.py", line 1130, in __call__
-    return self.main(*args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/Users/kelly.christensen/.pyenv/versions/enlinkenment/lib/python3.11/site-packages/click/core.py", line 1055, in main
-    rv = self.invoke(ctx)
-         ^^^^^^^^^^^^^^^^
-  File "/Users/kelly.christensen/.pyenv/versions/enlinkenment/lib/python3.11/site-packages/click/core.py", line 1404, in invoke
-    return ctx.invoke(self.callback, **ctx.params)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/Users/kelly.christensen/.pyenv/versions/enlinkenment/lib/python3.11/site-packages/click/core.py", line 760, in invoke
-    return __callback(*args, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/Users/kelly.christensen/Dev/enlinkenment/src/main.py", line 181, in main
-    recursively_aggregate_tables(
-  File "/Users/kelly.christensen/Dev/enlinkenment/src/aggregate.py", line 236, in recursively_aggregate_tables
-    connection.execute(query)
-duckdb.OutOfMemoryException: Out of Memory Error: could not allocate block of 262144 bytes (27487666176/27487790694 used) 
-```
 
 ## Performance
 

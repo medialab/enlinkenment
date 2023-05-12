@@ -66,6 +66,6 @@ def export_youtube_links(connection: duckdb.DuckDBPyConnection, outfile: str):
 
     # Export the final domain table to an out-file
     query = f"""
-    COPY (SELECT * FROM all_domains) TO '{outfile}' (HEADER, DELIMITER ',');
+    COPY (SELECT * FROM all_youtube_links) TO '{outfile}' (HEADER, DELIMITER ',');
     """
     connection.execute(query)
