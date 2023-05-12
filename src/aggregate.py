@@ -131,7 +131,7 @@ Group all tables of monthly tweet data on their column "{sql.group_by}" and aggr
             SELECT  {sql.select}
                     {month_column_aggregate_string}
             FROM {m.tweet_links_table_name}
-            WHERE domain_name IS NOT NULL
+            WHERE {sql.where}
             GROUP BY {sql.group_by};
             """
             connection.execute(query)
