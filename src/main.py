@@ -12,7 +12,7 @@ from domains import domain_aggregate_sql, export_domains
 from import_data import insert_processed_data
 from preprocessing import PARSED_URL_FILE_PATTERN, parse_input
 from utilities import SwitchColor
-from youtube_links import export_youtube_links, youtube_link_aggregate_sql
+from youtube_links import export_youtube_links, youtube_link_aggregate_sql, parse_links
 
 
 @click.command()
@@ -155,47 +155,66 @@ def main(data, glob_file_pattern, key, config_file, skip_pre_processing):
     # ------------------------------------------------------------------------ #
     # Step 4. Group together all the YouTube links
 
+    youtube_dir = output_directory_path.joinpath("youtube")
+    shutil.rmtree(youtube_dir, ignore_errors=True)
+    youtube_dir.mkdir()
+
+    with Timer(
+        name="---->total time to aggregate YouTube links for each month",
+        file=sys.stdout,
+        precision="nanoseconds",
+    ):
+        aggregate_tables(
+            connection=db_connection,
+            color=color.set(),
+            target_table_prefix="youtube_links",
+            sql=youtube_link_aggregate_sql(),
+        )
+    print("")
+
+    with Timer(
+        name="---->total time to sum all aggregated YouTube links",
+        file=sys.stdout,
+        precision="nanoseconds",
+    ):
+        recursively_aggregate_tables(
+            connection=db_connection,
+            targeted_table_prefix="youtube_links",
+            group_by=["normalized_url"],
+            color=color.set(),
+        )
+    print("")
+
+    with Timer(
+        name="---->total time to export aggregated YouTube links",
+        file=sys.stdout,
+        precision="nanoseconds",
+    ):
+        youtube_links_path_obj = youtube_dir.joinpath("youtube_links.csv")
+        export_youtube_links(
+            connection=db_connection, outfile=str(youtube_links_path_obj)
+        )
+    print("")
+
+    with Timer(
+        name="---->total time to parse YouTube links",
+        file=sys.stdout,
+        precision="nanoseconds",
+    ):
+        youtube_parsed_channel_ids_path_obj = youtube_dir.joinpath(
+            "youtube_channel_links.csv"
+        )
+        parse_links(
+            infile=youtube_links_path_obj,
+            outfile=youtube_parsed_channel_ids_path_obj,
+            color=color.set(),
+        )
+
+    # ------------------------------------------------------------------------ #
+    # Step 4. Group together all the YouTube links
+
     if config:
-        youtube_dir = output_directory_path.joinpath("youtube")
-        shutil.rmtree(youtube_dir, ignore_errors=True)
-        youtube_dir.mkdir()
-
-        with Timer(
-            name="---->total time to aggregate YouTube links for each month",
-            file=sys.stdout,
-            precision="nanoseconds",
-        ):
-            aggregate_tables(
-                connection=db_connection,
-                color=color.set(),
-                target_table_prefix="youtube_links",
-                sql=youtube_link_aggregate_sql(),
-            )
-        print("")
-
-        with Timer(
-            name="---->total time to sum all aggregated YouTube links",
-            file=sys.stdout,
-            precision="nanoseconds",
-        ):
-            recursively_aggregate_tables(
-                connection=db_connection,
-                targeted_table_prefix="youtube_links",
-                group_by=["normalized_url"],
-                color=color.set(),
-            )
-        print("")
-
-        with Timer(
-            name="---->total time to export aggregated YouTube links",
-            file=sys.stdout,
-            precision="nanoseconds",
-        ):
-            outfile_path_obj = youtube_dir.joinpath("youtube_links.csv")
-            export_youtube_links(
-                connection=db_connection, outfile=str(outfile_path_obj)
-            )
-        print("")
+        pass
 
 
 if __name__ == "__main__":

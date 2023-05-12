@@ -1,4 +1,20 @@
+import itertools
+from multiprocessing.dummy import Pool as ThreadPool
+from pathlib import Path
+
+import casanova
 import duckdb
+import rich.progress
+from minet.youtube.scrapers import scrape_channel_id
+from rich.progress import (
+    BarColumn,
+    MofNCompleteColumn,
+    Progress,
+    TextColumn,
+    TimeElapsedColumn,
+)
+import concurrent.futures
+from ural.youtube import YoutubeChannel, YoutubeVideo, is_youtube_url, parse_youtube_url
 
 from aggregate import AggregateSQL
 from exceptions import MissingTable
@@ -69,3 +85,47 @@ def export_youtube_links(connection: duckdb.DuckDBPyConnection, outfile: str):
     COPY (SELECT * FROM all_youtube_links) TO '{outfile}' (HEADER, DELIMITER ',');
     """
     connection.execute(query)
+
+
+def parse_links(infile: Path, outfile: Path, color: str):
+    """Function to get channel ID of all YouTube links."""
+    count = casanova.reader.count(str(infile))
+    with open(infile, "r") as f, open(outfile, "w") as of:
+        enricher = casanova.enricher(f, of, add=["channel_id"])
+        ProgressCompleteColumn = Progress(
+            TextColumn("{task.description}"),
+            MofNCompleteColumn(),
+            BarColumn(bar_width=60),
+            TimeElapsedColumn(),
+            expand=True,
+        )
+        with ProgressCompleteColumn as progress:
+            task_id = progress.add_task(
+                description=f"{color}Parsing YouTube links...", total=count
+            )
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                for row, normalized_url in enricher.cells(
+                    column="normalized_url", with_rows=True
+                ):
+                    args = [row, normalized_url, progress, task_id]
+                    future = executor.submit(parsing_worker, *args)
+                    row, add = future.result()
+                    enricher.writerow(row, add)
+
+
+def parsing_worker(
+    row: list,
+    normalized_url: str,
+    progress: Progress,
+    task_id: rich.progress.TaskID,
+):
+    channel_id = ""
+    if is_youtube_url(normalized_url):
+        parsed_url = parse_youtube_url(normalized_url)
+        if isinstance(parsed_url, YoutubeChannel):
+            channel_id = parsed_url.id
+        elif isinstance(parsed_url, YoutubeVideo):
+            url_with_protocol = "https://" + str(normalized_url)
+            channel_id = scrape_channel_id(url_with_protocol)
+    progress.update(task_id=task_id, advance=1)
+    return row, [channel_id]
