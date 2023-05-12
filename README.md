@@ -64,16 +64,21 @@ To avoid RAM issues, break up the process of aggregating all the data into steps
 
 ![combine aggregated domain names](docs/combine_domains.png)
 
-### Step 5. Aggregate each month's YouTube links
+### Step 5. Write aggregated domain names to a CSV file
+Write the contents of the finalized table of aggregated domain names to the CSV file `output/domains.csv`.
+
+### Step 6. Aggregate each month's YouTube links
 In the tables for monthly aggregates of links from YouTube, group each monthly tweet-link table according to the column `normalized_url` and sum counts of the remaining relevant metrics if the `domain_name` = `youtube.com`. The result of this step is a new series of tables in the database; each one corresponds to one of the monthly tweet-link tables. The table names follow the format: `youtube_links_in` + `YEAR` + `MONTH`.
 
 ![aggregate each month's youtube links](docs/youtube_aggregate.png)
 
-### Step 6. Combine aggregated YouTube links
+### Step 7. Combine aggregated YouTube links
 To avoid RAM issues, break up the process of aggregating all the data into steps. Recursively pair up tables of aggregated YouTube links, combine the pair in one table, and while selecting from that combined table, perform a new aggregation while grouping by the column `normalized_url`. Continue this process of pairing, combining, and aggregating until all tables have been combined and there is only one table of aggregated YouTube links.
 
 ![combine aggregated youtube links](docs/combine_youtube.png)
 
+### Step 8. Write aggregated YouTube links to a CSV file
+Write the contents of the finalized table of aggregated YouTube links to the CSV file `output/youtube/youtube_links.csv`.
 
 ## Performance
 
