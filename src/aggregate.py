@@ -46,7 +46,14 @@ def aggregate_tables(
     target_table_prefix: str,
     sql: AggregateSQL,
 ):
-    """Function to aggregate every target table's tweets according to the "group_by" column given in the sql parameter."""
+    """Function to aggregate every target table's tweets according to the "group_by" column given in the sql parameter.
+
+    Args:
+        connection (duckdb.DuckDBPyConnection): connection to database
+        color (str): color name for rich progress bar
+        target_table_prefix (str): prefix to captures tables to aggregate
+        sql (AggregateSQL): information to give to SQL commands
+    """
     msg = f"""
 Group all tables of monthly tweet data on their column "{sql.group_by}" and aggregate the columns according to the following SQL:
 {sql.select}"""
@@ -142,9 +149,18 @@ def recursively_aggregate_tables(
     connection: duckdb.DuckDBPyConnection,
     targeted_table_prefix: str,
     group_by: list,
+    any_value: list,
     color: str,
 ):
-    """Function to recursively concatenate pairs of tables and re-aggregate their contents until no more pairs can be made and all the targeted tables have been combined into one."""
+    """Function to recursively concatenate pairs of tables and re-aggregate their contents until no more pairs can be made and all the targeted tables have been combined into one.
+
+    Args:
+        connection (duckdb.DuckDBPyConnection): database connection
+        targeted_table_prefix (str): prefix to captures tables to aggregate
+        group_by (list): column names for SQL group by
+        any_value (list): column names not to be summed, but rather to have any value taken
+        color (str): color name for rich progress bar
+    """
 
     # Based on a consistent prefix, list the tables to recurisvely aggregate
     all_tables = connection.execute("SHOW TABLES;").fetchall()
@@ -223,12 +239,18 @@ Recursively concatenate pairs of tables and re-group by {group_by} until no more
                     # that will sum the aggregates of the remaining columns
                     for col in group_by:
                         columns.remove(col)
+                    any_value_syntax = []
+                    if any_value:
+                        for col in any_value:
+                            columns.remove(col)
+                            any_value_syntax.append(f"ANY_VALUE({col})")
+                    aggregation = group_by + any_value_syntax
                     summed_columns = [f"SUM({col})" for col in columns]
 
                     # On the concatenated data, group by the target column and insert into the combined table
                     query = f"""
                     INSERT INTO {new_table_name}
-                    SELECT  {', '.join(group_by)},
+                    SELECT  {', '.join(aggregation)},
                             {', '.join(summed_columns)}
                     FROM {left_table}
                     GROUP BY ({', '.join(group_by)});
@@ -250,6 +272,14 @@ Recursively concatenate pairs of tables and re-group by {group_by} until no more
 
 
 def write_live_table_row(table: Table, total_tours: str, tour: str, pairings: list):
+    """Function to modify rich Live Table and show recursive aggregation of tables.
+
+    Args:
+        table (Table): instance of the rich Live Table to modify
+        total_tours (str): total number of rows to add
+        tour (str): row number being added
+        pairings (list): array of table pairings to put in the Live Table columns
+    """
     cells = []
     tour = f"{tour} / {total_tours}"
     for pair in pairings:

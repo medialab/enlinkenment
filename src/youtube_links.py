@@ -1,20 +1,10 @@
-import itertools
-from multiprocessing.dummy import Pool as ThreadPool
 from pathlib import Path
+import csv
 
+import rich.progress
 import casanova
 import duckdb
-import rich.progress
-from minet.youtube.scrapers import scrape_channel_id
-from rich.progress import (
-    BarColumn,
-    MofNCompleteColumn,
-    Progress,
-    TextColumn,
-    TimeElapsedColumn,
-)
-import concurrent.futures
-from ural.youtube import YoutubeChannel, YoutubeVideo, is_youtube_url, parse_youtube_url
+from ural.youtube import YoutubeChannel, YoutubeVideo, parse_youtube_url
 
 from aggregate import AggregateSQL
 from exceptions import MissingTable
@@ -24,12 +14,14 @@ from utilities import list_tables
 def youtube_link_aggregate_sql() -> AggregateSQL:
     new_table_columns = [
         "normalized_url VARCHAR",
+        "link_for_scraping VARCHAR",
         "nb_collected_retweets_with_links UBIGINT",
         "sum_all_tweets_with_link UBIGINT",
         "nb_accounts_that_shared_link UBIGINT",
     ]
     select = """
             normalized_url,
+            ANY_VALUE(link),
             COUNT(DISTINCT retweeted_id),
             COUNT(DISTINCT tweet_id),
             COUNT(DISTINCT user_id),
@@ -87,45 +79,23 @@ def export_youtube_links(connection: duckdb.DuckDBPyConnection, outfile: str):
     connection.execute(query)
 
 
-def parse_links(infile: Path, outfile: Path, color: str):
-    """Function to get channel ID of all YouTube links."""
-    count = casanova.reader.count(str(infile))
-    with open(infile, "r") as f, open(outfile, "w") as of:
-        enricher = casanova.enricher(f, of, add=["channel_id"])
-        ProgressCompleteColumn = Progress(
-            TextColumn("{task.description}"),
-            MofNCompleteColumn(),
-            BarColumn(bar_width=60),
-            TimeElapsedColumn(),
-            expand=True,
-        )
-        with ProgressCompleteColumn as progress:
-            task_id = progress.add_task(
-                description=f"{color}Parsing YouTube links...", total=count
-            )
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                for row, normalized_url in enricher.cells(
-                    column="normalized_url", with_rows=True
-                ):
-                    args = [row, normalized_url, progress, task_id]
-                    future = executor.submit(parsing_worker, *args)
-                    row, add = future.result()
-                    enricher.writerow(row, add)
-
-
-def parsing_worker(
-    row: list,
-    normalized_url: str,
-    progress: Progress,
-    task_id: rich.progress.TaskID,
-):
-    channel_id = ""
-    if is_youtube_url(normalized_url):
-        parsed_url = parse_youtube_url(normalized_url)
-        if isinstance(parsed_url, YoutubeChannel):
-            channel_id = parsed_url.id
-        elif isinstance(parsed_url, YoutubeVideo):
-            url_with_protocol = "https://" + str(normalized_url)
-            channel_id = scrape_channel_id(url_with_protocol)
-    progress.update(task_id=task_id, advance=1)
-    return row, [channel_id]
+def parse_youtube_links(infile: Path, channel_outfile: Path, video_outfile: Path):
+    total = casanova.reader.count(infile)
+    with open(infile) as f, open(channel_outfile, "w") as cof, open(
+        video_outfile, "w"
+    ) as vof:
+        reader = casanova.reader(f)
+        v_fieldnames = reader.fieldnames
+        video_writer = csv.writer(vof)
+        video_writer.writerow(v_fieldnames)
+        channel_writer = csv.writer(cof)
+        channel_writer.writerow(v_fieldnames + ["channel_id"])
+        for row, url in rich.progress.track(
+            reader.cells("normalized_url", with_rows=True), total=total
+        ):
+            parsed_url = parse_youtube_url(url)
+            if isinstance(parsed_url, YoutubeVideo):
+                video_writer.writerow(row)
+            elif isinstance(parsed_url, YoutubeChannel):
+                if parsed_url.id:
+                    channel_writer.writerow(row + [parsed_url.id])

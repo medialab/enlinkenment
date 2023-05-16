@@ -9,10 +9,16 @@ from ebbe import Timer
 
 from aggregate import aggregate_tables, recursively_aggregate_tables
 from domains import domain_aggregate_sql, export_domains
-from import_data import insert_processed_data
+from import_data import import_youtube_parsed_data, insert_processed_data
 from preprocessing import PARSED_URL_FILE_PATTERN, parse_input
 from utilities import SwitchColor
-from youtube_links import export_youtube_links, youtube_link_aggregate_sql, parse_links
+from youtube_channels import aggregate_channels
+from youtube_links import (
+    export_youtube_links,
+    parse_youtube_links,
+    youtube_link_aggregate_sql,
+)
+from youtube_videos import call_youtube_videos
 
 
 @click.command()
@@ -54,13 +60,13 @@ def main(data, glob_file_pattern, key, config_file, skip_pre_processing):
     data_path = Path(data)
 
     # If given, parse the array of youtube API keys
-    config = None
+    youtube_keys = None
     if config_file:
         with open(config_file, "r") as f:
             config = json.load(fp=f)
+            youtube_keys = config["youtube"]["key_list"]
     elif key:
-        key_list = list(key)
-        config = {"youtube": {"key_list": key_list}}
+        youtube_keys = list(key)
 
     # Set up file paths for the output
     output_dir_name = "output"
@@ -141,6 +147,7 @@ def main(data, glob_file_pattern, key, config_file, skip_pre_processing):
             targeted_table_prefix="domains_in",
             group_by=["domain_id", "domain_name"],
             color=color.set(),
+            any_value=[],
         )
     print("")
 
@@ -158,6 +165,17 @@ def main(data, glob_file_pattern, key, config_file, skip_pre_processing):
     youtube_dir = output_directory_path.joinpath("youtube")
     shutil.rmtree(youtube_dir, ignore_errors=True)
     youtube_dir.mkdir()
+    youtube_links_path_obj = youtube_dir.joinpath("youtube_links.csv")
+    youtube_parsed_channel_ids_path_obj = youtube_dir.joinpath(
+        "youtube_channel_ids.csv"
+    )
+    youtube_videos_path_obj = youtube_dir.joinpath("youtube_videos.csv")
+    youtube_videos_metadata_path_obj = youtube_dir.joinpath(
+        "youtube_video_metadata.csv"
+    )
+    aggregated_youtube_channels_path_obj = youtube_dir.joinpath(
+        "aggregated_youtube_channels.csv"
+    )
 
     with Timer(
         name="---->total time to aggregate YouTube links for each month",
@@ -181,6 +199,7 @@ def main(data, glob_file_pattern, key, config_file, skip_pre_processing):
             connection=db_connection,
             targeted_table_prefix="youtube_links",
             group_by=["normalized_url"],
+            any_value=["link_for_scraping"],
             color=color.set(),
         )
     print("")
@@ -190,31 +209,59 @@ def main(data, glob_file_pattern, key, config_file, skip_pre_processing):
         file=sys.stdout,
         precision="nanoseconds",
     ):
-        youtube_links_path_obj = youtube_dir.joinpath("youtube_links.csv")
         export_youtube_links(
             connection=db_connection, outfile=str(youtube_links_path_obj)
         )
     print("")
 
     with Timer(
-        name="---->total time to parse YouTube links",
+        name="---->total time to get every links' channel ID",
         file=sys.stdout,
         precision="nanoseconds",
     ):
-        youtube_parsed_channel_ids_path_obj = youtube_dir.joinpath(
-            "youtube_channel_links.csv"
-        )
-        parse_links(
+        parse_youtube_links(
             infile=youtube_links_path_obj,
-            outfile=youtube_parsed_channel_ids_path_obj,
-            color=color.set(),
+            channel_outfile=youtube_parsed_channel_ids_path_obj,
+            video_outfile=youtube_videos_path_obj,
         )
 
     # ------------------------------------------------------------------------ #
-    # Step 4. Group together all the YouTube links
+    # Step 4. Get channel data
 
-    if config:
-        pass
+    if youtube_keys:
+        with Timer(
+            name="---->total time to parse YouTube links",
+            file=sys.stdout,
+            precision="nanoseconds",
+        ):
+            call_youtube_videos(
+                infile=youtube_videos_path_obj,
+                outfile=youtube_videos_metadata_path_obj,
+                keys=youtube_keys,
+            )
+
+        with Timer(
+            name="---->total time to import parsed YouTube link data",
+            file=sys.stdout,
+            precision="nanoseconds",
+        ):
+            import_youtube_parsed_data(
+                connection=db_connection,
+                video_infile=youtube_videos_metadata_path_obj,
+                channel_infile=youtube_parsed_channel_ids_path_obj,
+            )
+        print("")
+
+        with Timer(
+            name="---->total time to aggregate YouTube channels",
+            file=sys.stdout,
+            precision="nanoseconds",
+        ):
+            aggregate_channels(
+                connection=db_connection,
+                outfile=aggregated_youtube_channels_path_obj,
+            )
+        print("")
 
 
 if __name__ == "__main__":

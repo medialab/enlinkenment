@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import duckdb
+from minet.youtube.constants import YOUTUBE_VIDEO_CSV_HEADERS
 from rich.progress import (
     BarColumn,
     MofNCompleteColumn,
@@ -96,6 +97,7 @@ For each pre-processed parquet file, parse the tweets' publication dates and ins
                 domain_id VARCHAR,
                 domain_name VARCHAR,
                 normalized_url VARCHAR,
+                link VARCHAR,
                 retweeted_id VARCHAR,
                 tweet_id VARCHAR,
                 user_id VARCHAR,
@@ -122,6 +124,7 @@ For each pre-processed parquet file, parse the tweets' publication dates and ins
                 SELECT  md5(domain_name),
                         domain_name,
                         normalized_url,
+                        link,
                         retweeted_id,
                         tweet_id,
                         user_id,
@@ -140,3 +143,55 @@ For each pre-processed parquet file, parse the tweets' publication dates and ins
                 """
                 connection.execute(query)
             progress.update(task_id=task3, advance=1)
+
+
+def import_youtube_parsed_data(
+    connection: duckdb.DuckDBPyConnection,
+    video_infile: Path,
+    channel_infile: Path,
+):
+    """Function imports the parsed channel CSV and the video metadata CSV into one table.
+
+    Args:
+        connection (duckdb.DuckDBPyConnection): database connection
+        video_infile (Path): path to metadata from called videos
+        channel_infile (Path): path to parsed channel links
+    """
+    exported_db_table_name = "all_youtube_links"
+    import_table_name = "all_parsed_youtube_links"
+    video_file_name = str(video_infile)
+    channel_file_name = str(channel_infile)
+
+    exported_db_table = duckdb.table(exported_db_table_name, connection=connection)
+    columns_names_before_parsing = exported_db_table.columns
+    columns_and_dtypes_before_parsing = ", ".join(
+        [
+            f"{col} {dtype}"
+            for col, dtype in list(
+                zip(columns_names_before_parsing, exported_db_table.dtypes)
+            )
+        ]
+    )
+
+    query = f"""
+    DROP TABLE IF EXISTS {import_table_name};
+    CREATE TABLE {import_table_name}({columns_and_dtypes_before_parsing}, channel_id VARCHAR);
+    """
+    connection.execute(query)
+
+    query = f"""
+    INSERT INTO {import_table_name}
+    SELECT {", ".join(columns_names_before_parsing)}, channel_id
+    FROM (
+        SELECT {", ".join(columns_names_before_parsing+YOUTUBE_VIDEO_CSV_HEADERS)}
+        FROM read_csv('{video_file_name}', AUTO_DETECT=TRUE)
+    )
+    """
+    connection.execute(query)
+
+    query = f"""
+    INSERT INTO {import_table_name}
+    SELECT {", ".join(columns_names_before_parsing)}, channel_id
+    FROM read_csv('{channel_file_name}', AUTO_DETECT=TRUE)
+    """
+    connection.execute(query)
